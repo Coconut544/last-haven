@@ -1,0 +1,20 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/main/game.gd" id="1_game"]
+[ext_resource type="PackedScene" path="res://scenes/world/World.tscn" id="2_world"]
+[ext_resource type="PackedScene" path="res://scenes/player/Player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/ui/Hud.tscn" id="4_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/MainMenu.tscn" id="5_menu"]
+
+[node name="Main" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1_game")
+
+[node name="World" parent="." instance=ExtResource("2_world")]
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+position = Vector2(0, -420)
+
+[node name="Hud" parent="." instance=ExtResource("4_hud")]
+
+[node name="MainMenu" parent="." instance=ExtResource("5_menu")]

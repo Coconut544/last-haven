@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="BuildableDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/building/buildable_definition.gd" id="1_buildable"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_wood"]
+script = ExtResource("2_ingredient")
+item_id = "wood"
+quantity = 3
+
+[sub_resource type="Resource" id="Ingredient_fiber"]
+script = ExtResource("2_ingredient")
+item_id = "fiber"
+quantity = 2
+
+[resource]
+script = ExtResource("1_buildable")
+id = "storage_crate"
+display_name = "Storage Crate"
+description = "Keeps supplies inside a base instead of on your back."
+category = 2
+behaviour = 2
+cost = Array[Ingredient]([SubResource("Ingredient_wood"), SubResource("Ingredient_fiber")])
+max_health = 120.0
+occupancy = Vector2i(1, 1)
+collision_size = Vector2(28, 28)
+storage_capacity = 12
+primary_color = Color(0.4, 0.28, 0.16, 1)
+accent_color = Color(0.28, 0.19, 0.11, 1)

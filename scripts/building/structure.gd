@@ -1,0 +1,224 @@
+class_name Structure
+extends StaticBody2D
+## A player-built (or world-spawned) structure.
+##
+## One scene drives every buildable: the BuildableDefinition decides footprint,
+## health, behaviour and colour. Behaviours implemented for Phase 2:
+## - SOLID: blocks movement;
+## - DOOR: blocks movement until opened (then it is walk-through);
+## - STORAGE: owns an Inventory that the owner can open.
+##
+## Ownership is stored as an id string so it can move to a server-side account id
+## later without touching this script.
+
+signal destroyed(structure: Structure)
+signal door_toggled(structure: Structure, open: bool)
+
+@export var definition: BuildableDefinition
+@export var owner_id: String = ""
+
+@onready var health: HealthComponent = $Health
+@onready var body_shape: CollisionShape2D = $CollisionShape2D
+@onready var interaction_area: Area2D = $InteractionArea
+@onready var interaction_shape: CollisionShape2D = $InteractionArea/CollisionShape2D
+@onready var storage: InventoryComponent = $Storage
+
+var door_open: bool = false
+var _built_position := Vector2.ZERO
+
+
+func _ready() -> void:
+	add_to_group("structure")
+	add_to_group("streamed")
+	add_to_group("interactable")
+	_built_position = position
+	if definition == null:
+		push_error("[Structure] %s is missing a definition" % name)
+		return
+	_apply_definition()
+	health.died.connect(_on_died)
+	queue_redraw()
+
+
+func _apply_definition() -> void:
+	health.set_max_health(definition.max_health, false)
+	health.current_health = definition.max_health
+	health.health_changed.emit(health.current_health, health.max_health)
+
+	if body_shape != null and body_shape.shape is RectangleShape2D:
+		var body_rect := body_shape.shape as RectangleShape2D
+		body_rect.size = definition.collision_size
+	# Decoration pieces (floors) are walkable and never block building.
+	if body_shape != null:
+		body_shape.set_deferred("disabled", not definition.blocks_movement())
+	if interaction_shape != null and interaction_shape.shape is CircleShape2D:
+		var interaction_circle := interaction_shape.shape as CircleShape2D
+		interaction_circle.radius = maxf(definition.collision_size.length() * 0.6, 30.0)
+
+	if storage != null:
+		storage.capacity = maxi(1, definition.storage_capacity)
+		storage.set_process(false)
+
+	# Only doors and storage crates are worth interacting with; walls stay inert
+	# so the interaction prompt never points at a plain wall.
+	if interaction_area != null:
+		interaction_area.monitoring = is_door() or is_storage()
+	if not is_door() and not is_storage():
+		remove_from_group("interactable")
+
+
+func is_storage() -> bool:
+	return definition != null and definition.is_storage()
+
+
+func is_door() -> bool:
+	return definition != null and definition.behaviour == BuildableDefinition.Behaviour.DOOR
+
+
+func get_structure_id() -> String:
+	return "%s@%d,%d" % [
+		definition.id if definition != null else "unknown",
+		roundi(global_position.x),
+		roundi(global_position.y),
+	]
+
+
+# --- interaction --------------------------------------------------------------
+
+func get_interaction_label() -> String:
+	if definition == null:
+		return "Structure"
+	if is_door():
+		return "%s Door" % ("Close" if door_open else "Open")
+	if is_storage():
+		return "Open %s" % definition.display_name
+	return definition.display_name
+
+
+func interact(actor: Node) -> bool:
+	if is_door():
+		toggle_door()
+		GameEvents.interaction_used.emit(self)
+		return true
+	if is_storage():
+		var inventory := get_inventory()
+		if inventory != null:
+			GameEvents.container_opened.emit(inventory, definition.display_name)
+			GameEvents.interaction_used.emit(self)
+			return true
+	return false
+
+
+func toggle_door() -> void:
+	door_open = not door_open
+	if body_shape != null:
+		body_shape.set_deferred("disabled", door_open)
+	door_toggled.emit(self, door_open)
+	queue_redraw()
+
+
+func get_inventory() -> Inventory:
+	if storage == null or not is_storage():
+		return null
+	return storage.inventory
+
+
+# --- damage / destruction -----------------------------------------------------
+
+func apply_damage(amount: float, source: Node = null) -> float:
+	return health.apply_damage(DamageInfo.create(amount, source, DamageInfo.Type.MELEE, global_position))
+
+
+func repair(amount: float) -> float:
+	return health.heal(amount)
+
+
+func _on_died(_info: DamageInfo) -> void:
+	# Spill contents before disappearing so stored loot is never silently lost.
+	var inventory := get_inventory()
+	if inventory != null and not inventory.count_all_items().is_empty():
+		var world := get_tree().get_first_node_in_group("world")
+		if world != null and world.has_method("spawn_loot_bag"):
+			world.spawn_loot_bag(global_position, inventory.to_dict())
+	destroyed.emit(self)
+	queue_free()
+
+
+# --- streaming ----------------------------------------------------------------
+
+func set_streamed_active(active: bool) -> void:
+	visible = active
+	if body_shape != null:
+		body_shape.set_deferred("disabled", not active or door_open)
+	if interaction_area != null:
+		interaction_area.monitoring = active and (is_door() or is_storage())
+
+
+# --- persistence --------------------------------------------------------------
+
+func serialize_state() -> Dictionary:
+	var inventory := get_inventory()
+	var state := {
+		"definition": definition.id if definition != null else "",
+		"position": [position.x, position.y],
+		"rotation": rotation,
+		"owner": owner_id,
+		"health": health.current_health,
+		"door_open": door_open,
+	}
+	if inventory != null:
+		state["inventory"] = inventory.to_dict()
+	return state
+
+
+func apply_state(state: Dictionary) -> void:
+	var position_data: Array = state.get("position", [])
+	if position_data.size() == 2:
+		position = Vector2(float(position_data[0]), float(position_data[1]))
+	rotation = float(state.get("rotation", rotation))
+	owner_id = str(state.get("owner", owner_id))
+	health.set_health(float(state.get("health", health.max_health)))
+	var should_open := bool(state.get("door_open", false))
+	if should_open != door_open:
+		toggle_door()
+	var inventory := get_inventory()
+	if inventory != null:
+		inventory.load_from_dict(state.get("inventory", {}))
+
+
+# --- placeholder visuals ------------------------------------------------------
+
+func _draw_floor(rect: Rect2) -> void:
+	draw_rect(rect, definition.primary_color, true)
+	draw_rect(rect, definition.accent_color, false, 1.0)
+	var plank := maxf(4.0, rect.size.y / 4.0)
+	var y := rect.position.y + plank
+	while y < rect.end.y:
+		draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y), definition.accent_color, 1.0)
+		y += plank
+
+
+func _draw() -> void:
+	if definition == null:
+		return
+	var half := definition.collision_size * 0.5
+	var rect := Rect2(-half, definition.collision_size)
+	if definition.behaviour == BuildableDefinition.Behaviour.DECORATION:
+		_draw_floor(rect)
+		return
+	var body_color := definition.primary_color
+	if is_door() and door_open:
+		body_color = definition.primary_color.darkened(0.35)
+	draw_rect(rect, body_color, true)
+	draw_rect(rect, definition.accent_color, false, 2.0)
+
+	# Health bar when damaged, so raids are readable at a glance.
+	if health != null and not health.is_full():
+		var ratio := health.get_ratio()
+		var bar_width := maxf(definition.collision_size.x, 24.0)
+		draw_rect(Rect2(-bar_width * 0.5, -half.y - 10.0, bar_width, 4.0), Color(0, 0, 0, 0.6), true)
+		draw_rect(Rect2(-bar_width * 0.5, -half.y - 10.0, bar_width * ratio, 4.0),
+				Color(0.85, 0.35, 0.25), true)
+
+	if is_storage():
+		draw_line(Vector2(-half.x, 0), Vector2(half.x, 0), definition.accent_color, 2.0)

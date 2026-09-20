@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BuildableDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/building/buildable_definition.gd" id="1_buildable"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_wood"]
+script = ExtResource("2_ingredient")
+item_id = "wood"
+quantity = 2
+
+[sub_resource type="Resource" id="Ingredient_scrap"]
+script = ExtResource("2_ingredient")
+item_id = "scrap"
+quantity = 1
+
+[resource]
+script = ExtResource("1_buildable")
+id = "wood_door"
+display_name = "Wood Door"
+description = "Opens for you, blocks everything else until it is broken down."
+category = 1
+behaviour = 1
+cost = Array[Ingredient]([SubResource("Ingredient_wood"), SubResource("Ingredient_scrap")])
+max_health = 160.0
+occupancy = Vector2i(1, 1)
+collision_size = Vector2(30, 12)
+primary_color = Color(0.46, 0.34, 0.2, 1)
+accent_color = Color(0.62, 0.48, 0.25, 1)

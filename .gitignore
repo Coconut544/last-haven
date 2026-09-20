@@ -15,3 +15,21 @@ export_credentials.cfg
 .mono/
 data_*/
 mono_crash.*.json
+
+# Build outputs (produced locally or by CI)
+build/
+*.apk
+*.aab
+*.idsig
+*.pck
+
+# Android signing material - never commit private keys
+*.keystore
+*.jks
+debug.keystore
+release.keystore
+
+# Local tooling / editor noise
+.tools/
+*.log
+.DS_Store

@@ -1,0 +1,35 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/building/structure.gd" id="1_structure"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/inventory/inventory_component.gd" id="3_inventory"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(30, 30)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_area"]
+radius = 34.0
+
+[node name="Structure" type="StaticBody2D"]
+collision_layer = 1
+collision_mask = 0
+script = ExtResource("1_structure")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="InteractionArea" type="Area2D" parent="."]
+collision_layer = 16
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractionArea"]
+shape = SubResource("CircleShape2D_area")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 200.0
+
+[node name="Storage" type="Node" parent="."]
+script = ExtResource("3_inventory")
+capacity = 12
+inventory_id = "storage"

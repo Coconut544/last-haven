@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="Recipe" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/crafting/recipe.gd" id="1_recipe"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_wood"]
+script = ExtResource("2_ingredient")
+item_id = "wood"
+quantity = 3
+
+[sub_resource type="Resource" id="Ingredient_stone"]
+script = ExtResource("2_ingredient")
+item_id = "stone"
+quantity = 2
+
+[sub_resource type="Resource" id="Ingredient_fiber"]
+script = ExtResource("2_ingredient")
+item_id = "fiber"
+quantity = 2
+
+[resource]
+script = ExtResource("1_recipe")
+id = "axe"
+display_name = "Stone Axe"
+category = 0
+output_item_id = "axe"
+output_quantity = 1
+ingredients = Array[Ingredient]([SubResource("Ingredient_wood"), SubResource("Ingredient_stone"), SubResource("Ingredient_fiber")])
