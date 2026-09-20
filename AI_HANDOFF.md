@@ -47,9 +47,10 @@ The debug APK now builds for real. Build environment, all versions pinned in the
 | Evidence | Result |
 | --- | --- |
 | Local `--export-debug` (same flags as CI) | APK produced and signed; identical byte size to the CI artifact |
-| GitHub Actions `Android build` run [35508726118](https://github.com/Coconut544/last-haven/actions/runs/35508726118) (push to `main`) | **success** - every step green including APK validation and artifact upload |
-| GitHub Actions `Validate` run 35508726142 (same commit) | success - 139 checks, 0 failures |
-| Downloaded artifact, re-verified outside CI | sha256 `c9f8523eafae0f651752443b7c28a4d36aa227219663a75da37d77117d635fbe` matches the reported hash; zip integrity OK; `application-id com.lasthaven.game`; `version 0.1.0` (code 1); `min-sdk 24`; `target-sdk 36`; contains `/lib/arm64-v8a/libgodot_android.so` and `/assets/assets.sparsepck`; `apksigner verify` passes |
+| GitHub Actions `Android build` run [35508726118](https://github.com/Coconut544/last-haven/actions/runs/35508726118) (push to `main`, cache miss) | **success** - every step green including APK validation and artifact upload |
+| GitHub Actions `Android build` run [35508835085](https://github.com/Coconut544/last-haven/actions/runs/35508835085) (later `main`, cache hit) | **success** - same result through the cached-templates path, with the Godot install step skipped, and with `actions/setup-java@v5` |
+| GitHub Actions `Validate` runs 35508726142 and 35508835110 | success - 139 checks, 0 failures on each of the Android commits |
+| Both uploaded artifacts, downloaded and re-verified outside CI | sha256 matches the hash each run reported; zip integrity OK; `application-id com.lasthaven.game`; `version 0.1.0` (code 1); `min-sdk 24`; `target-sdk 36`; contains `/lib/arm64-v8a/libgodot_android.so` and `/assets/assets.sparsepck`; `apksigner verify` passes |
 
 The first real CI run (35508672957) failed in `android-actions/setup-android@v3`, which runs
 `sdkmanager tools` as part of its default package list; that legacy package no longer exists in
@@ -106,9 +107,12 @@ only the three packages the export uses.
 - A `pull_request` synchronize event did **not** start any workflow run for the PR that the
   managed integration itself opened (see section 5); pushes to `main` do trigger runs, which is
   why the Android workflow is anchored there.
-- CI prints deprecation warnings for `actions/setup-java@v4` (migrate to `@v5`) and for the
-  Node 20 runtimes of `actions/checkout@v4` / `actions/cache@v4` / `actions/upload-artifact@v4`.
-  They still execute; the `ubuntu-latest` image also migrates to Ubuntu 26 on 2026-10-19.
+- Every CI run generates a **new** debug key, so each APK has a different certificate and a
+  different sha256 even though the byte size is stable at 28,656,730. That is expected.
+- CI still warns that `actions/checkout@v4`, `actions/cache@v4` and `actions/upload-artifact@v4`
+  target the deprecated Node 20 runtime (they are forced onto Node 24 and still work), and that
+  `ubuntu-latest` migrates to Ubuntu 26 on 2026-10-19. `actions/setup-java` was already moved to
+  `@v5`, which cleared its deprecation warning.
 
 ## 5. Where things live
 
