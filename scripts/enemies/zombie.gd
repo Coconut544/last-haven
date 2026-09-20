@@ -9,11 +9,17 @@ extends CharacterBody2D
 ## and its range grows at night. Navigation is deliberately simple steering with
 ## a wall-slide nudge: the prototype world has no nav mesh yet, and adding
 ## NavigationAgent2D before the map is large would be premature (Phase 6).
+##
+## Visual rendering is delegated to a ZombieAnimator child node. To swap
+## zombie models or animation systems, replace the animator node — the
+## Zombie script never draws anything directly.
 
 enum State { IDLE, WANDER, CHASE, ATTACK, SEARCH, RETURN, DEAD }
 
 ## Visual variant controls the silhouette, colours, size and speed multiplier.
 enum ZombieVariant { STANDARD, HEAVY, FAST, SPECIAL }
+
+const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/combat/DamageNumber.tscn")
 
 @export_group("Movement")
 @export var wander_speed: float = 26.0
@@ -45,6 +51,9 @@ enum ZombieVariant { STANDARD, HEAVY, FAST, SPECIAL }
 @onready var hurtbox: Hurtbox = $Hurtbox
 @onready var sight: RayCast2D = $Sight
 
+## The zombie animator responsible for all visual rendering.
+var zombie_animator: ZombieAnimator
+
 var state: State = State.IDLE
 ## Spawn point the zombie returns to when it loses interest.
 var home_position: Vector2 = Vector2.ZERO
@@ -54,13 +63,6 @@ var facing: Vector2 = Vector2.DOWN
 var _state_time: float = 0.0
 var _attack_timer: float = 0.0
 var _wander_direction: Vector2 = Vector2.DOWN
-
-## Visual colours derived from variant (refreshed on _draw).
-var _body_color := Color(0.36, 0.44, 0.33)
-var _skin_color := Color(0.55, 0.63, 0.48)
-var _clothes_color := Color(0.30, 0.32, 0.28)
-var _accent_color := Color(0.50, 0.15, 0.10)
-var _body_scale := 1.0
 var _last_known_position: Vector2 = Vector2.ZERO
 var _hit_flash: float = 0.0
 var _dead: bool = false
@@ -77,7 +79,30 @@ func _ready() -> void:
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
 	GameEvents.noise_emitted.connect(_on_noise)
+	_setup_animator()
 	_set_state(State.IDLE)
+
+
+func _setup_animator() -> void:
+	# If an animator already exists in the scene, use it.
+	var existing := get_node_or_null("ZombieAnimator") as ZombieAnimator
+	if existing != null:
+		zombie_animator = existing
+		return
+	# Otherwise create the default procedural animator.
+	zombie_animator = ProceduralZombieAnimator.new()
+	zombie_animator.name = "ZombieAnimator"
+	add_child(zombie_animator)
+
+
+## Swaps the zombie animator at runtime.
+func set_animator(new_animator: ZombieAnimator) -> void:
+	if zombie_animator != null and is_instance_valid(zombie_animator):
+		zombie_animator.queue_free()
+	zombie_animator = new_animator
+	zombie_animator.name = "ZombieAnimator"
+	add_child(zombie_animator)
+	queue_redraw()
 
 
 func is_dead() -> bool:
@@ -111,7 +136,6 @@ func _set_state(new_state: State) -> void:
 			pass
 		State.DEAD:
 			pass
-	queue_redraw()
 
 
 func _physics_process(delta: float) -> void:
@@ -121,7 +145,6 @@ func _physics_process(delta: float) -> void:
 	_state_time -= delta
 	if _hit_flash > 0.0:
 		_hit_flash -= delta
-		queue_redraw()
 
 	_try_acquire_target()
 
@@ -138,6 +161,11 @@ func _physics_process(delta: float) -> void:
 			_tick_search(delta)
 		State.RETURN:
 			_tick_return(delta)
+
+	# Update the animator with the latest zombie state.
+	if zombie_animator != null:
+		zombie_animator.update_from_zombie(self)
+		zombie_animator.queue_redraw()
 
 
 func _tick_idle(delta: float) -> void:
@@ -181,7 +209,6 @@ func _tick_attack(delta: float) -> void:
 
 
 func _tick_search(delta: float) -> void:
-	# Walk to where the target was last seen, then keep listening for a while.
 	var distance := global_position.distance_to(_last_known_position)
 	if distance > 24.0:
 		_move_towards(_last_known_position, wander_speed * 2.2, delta)
@@ -204,7 +231,6 @@ func _strike() -> void:
 	attack_hitbox.reach = attack_range * 0.6
 	attack_hitbox.activate(facing, attack_damage)
 	GameEvents.noise_emitted.emit(global_position, 150.0, self)
-	queue_redraw()
 
 
 # --- perception ---------------------------------------------------------------
@@ -262,13 +288,28 @@ func _on_noise(noise_position: Vector2, radius: float, source: Node) -> void:
 
 func _on_damaged(info: DamageInfo) -> void:
 	_hit_flash = 0.18
+	# Spawn floating damage number.
+	_spawn_damage_number(info.amount)
 	if info != null and info.source is Node2D:
 		# Being hit always gives away the attacker's position.
 		target = info.source as Node2D
 		_last_known_position = target.global_position
 		if state != State.ATTACK:
 			_set_state(State.CHASE)
-	queue_redraw()
+
+
+func _spawn_damage_number(damage: float) -> void:
+	if DAMAGE_NUMBER_SCENE == null:
+		return
+	var number := DAMAGE_NUMBER_SCENE.instantiate() as DamageNumber
+	if number == null:
+		return
+	number.setup(damage)
+	var s := 1.0
+	if zombie_animator != null:
+		s = zombie_animator.body_scale
+	number.position = position + Vector2(randf_range(-8, 8), -28 - s * 4)
+	get_tree().current_scene.add_child(number)
 
 
 # --- movement -----------------------------------------------------------------
@@ -281,11 +322,9 @@ func _move_towards(destination: Vector2, speed: float, delta: float) -> void:
 	facing = offset.normalized()
 	velocity = velocity.move_toward(facing * speed, acceleration * delta)
 	move_and_slide()
-	# No nav mesh yet: slide along walls by pushing sideways when blocked.
 	if is_on_wall():
 		var normal := get_wall_normal()
 		velocity += normal.rotated(PI * 0.5) * speed * 0.6
-	queue_redraw()
 
 
 func _decelerate(delta: float) -> void:
@@ -307,7 +346,6 @@ func _on_died(_info: DamageInfo) -> void:
 		hurtbox.set_deferred("monitorable", false)
 	_spawn_loot()
 	GameEvents.enemy_died.emit(self, global_position)
-	queue_redraw()
 	# Small delay so the death state is visible before the node disappears.
 	await get_tree().create_timer(0.4).timeout
 	queue_free()
@@ -325,213 +363,3 @@ func _spawn_loot() -> void:
 	if ingredients.is_empty():
 		return
 	world.spawn_loot_bag_from_ingredients(global_position, ingredients)
-
-
-# --- visuals ---------------------------------------------------------------
-
-func _draw() -> void:
-	_refresh_variant_colors()
-	var body := _body_color
-	var skin := _skin_color
-	if _hit_flash > 0.0:
-		body = body.lerp(Color(0.95, 0.35, 0.3), 0.65)
-	if _dead:
-		_draw_corpse(body.darkened(0.45), skin.darkened(0.4))
-		return
-
-	var s := _body_scale
-	var dir := facing.normalized()
-
-	# Shadow.
-	_draw_circle(Vector2(0, 12 * s), 14.0 * s, Color(0, 0, 0, 0.22))
-
-	match visual_variant:
-		ZombieVariant.STANDARD:
-			_draw_standard(body, skin, s, dir)
-		ZombieVariant.HEAVY:
-			_draw_heavy(body, skin, s, dir)
-		ZombieVariant.FAST:
-			_draw_fast(body, skin, s, dir)
-		ZombieVariant.SPECIAL:
-			_draw_special(body, skin, s, dir)
-
-	# Health bar.
-	if health != null and not health.is_full():
-		var ratio := health.get_ratio()
-		var bar_w := 24.0 * s
-		_draw_rounded_rect(Rect2(-bar_w * 0.5, -28.0 * s, bar_w, 4.0), Color(0, 0, 0, 0.65), 1.0)
-		_draw_rounded_rect(Rect2(-bar_w * 0.5, -28.0 * s, bar_w * ratio, 4.0), Color(0.8, 0.25, 0.2), 1.0)
-
-
-## Standard infected survivor — common, hunched, shambling.
-func _draw_standard(body: Color, skin: Color, s: float, dir: Vector2) -> void:
-	# Legs (torn pants).
-	_draw_rounded_rect(Rect2(-8 * s, 3 * s, 6 * s, 10 * s), body.darkened(0.15), 1.0)
-	_draw_rounded_rect(Rect2(2 * s, 3 * s, 6 * s, 10 * s), body.darkened(0.15), 1.0)
-	# Tattered shirt torso.
-	_draw_rounded_rect(Rect2(-10 * s, -8 * s, 20 * s, 13 * s), _clothes_color, 2.0)
-	# Tear on shirt.
-	draw_line(Vector2(-4 * s, -2 * s), Vector2(2 * s, 4 * s), body.darkened(0.3), 1.0)
-	# Arms (reaching forward, undead posture).
-	var reach := dir * 12.0 * s
-	_draw_rounded_rect(Rect2(-13 * s, -6 * s, 4 * s, 10 * s), skin.darkened(0.1), 1.0)
-	_draw_rounded_rect(Rect2(9 * s, -6 * s, 4 * s, 10 * s), skin.darkened(0.1), 1.0)
-	# Hands reaching.
-	_draw_circle(Vector2(-11 * s, 4 * s) + dir * 3.0 * s, 3.0 * s, skin.darkened(0.15))
-	_draw_circle(Vector2(11 * s, 4 * s) + dir * 3.0 * s, 3.0 * s, skin.darkened(0.15))
-	# Head — bald with torn scalp.
-	_draw_circle(Vector2(0, -14 * s), 8.0 * s, skin)
-	_draw_circle(Vector2(0, -18 * s), 4.0 * s, skin.darkened(0.25))
-	# Slack jaw.
-	_draw_rounded_rect(Rect2(-3.5 * s, -10 * s, 7 * s, 4 * s), skin.darkened(0.35), 1.0)
-	# Eyes glow when aggressive.
-	if state == State.CHASE or state == State.ATTACK:
-		_draw_circle(Vector2(-3 * s, -15 * s), 2.0 * s, Color(0.95, 0.35, 0.25))
-		_draw_circle(Vector2(3 * s, -15 * s), 2.0 * s, Color(0.95, 0.35, 0.25))
-	else:
-		_draw_circle(Vector2(-3 * s, -15 * s), 1.5 * s, Color(0.6, 0.25, 0.2))
-		_draw_circle(Vector2(3 * s, -15 * s), 1.5 * s, Color(0.6, 0.25, 0.2))
-
-
-## Heavy / brute — wider, slower, bulkier silhouette, different clothing.
-func _draw_heavy(body: Color, skin: Color, s: float, dir: Vector2) -> void:
-	var hs := s * 1.25  # wider body.
-	# Thick legs.
-	_draw_rounded_rect(Rect2(-10 * hs, 2 * hs, 8 * hs, 12 * hs), body.darkened(0.2), 1.5)
-	_draw_rounded_rect(Rect2(2 * hs, 2 * hs, 8 * hs, 12 * hs), body.darkened(0.2), 1.5)
-	# Industrial vest / overalls.
-	_draw_rounded_rect(Rect2(-13 * hs, -10 * hs, 26 * hs, 14 * hs), Color(0.28, 0.26, 0.24), 2.0)
-	# Reflective stripe.
-	draw_line(Vector2(-13 * hs, -4 * hs), Vector2(13 * hs, -4 * hs), Color(0.65, 0.55, 0.15), 2.0)
-	# Massive arms.
-	_draw_rounded_rect(Rect2(-17 * hs, -7 * hs, 5 * hs, 12 * hs), skin.darkened(0.05), 1.5)
-	_draw_rounded_rect(Rect2(12 * hs, -7 * hs, 5 * hs, 12 * hs), skin.darkened(0.05), 1.5)
-	# Big fists.
-	_draw_circle(Vector2(-14.5 * hs, 5 * hs) + dir * 4.0 * hs, 4.5 * hs, skin.darkened(0.1))
-	_draw_circle(Vector2(14.5 * hs, 5 * hs) + dir * 4.0 * hs, 4.5 * hs, skin.darkened(0.1))
-	# Head — shaved, thick neck.
-	_draw_circle(Vector2(0, -15 * hs), 9.0 * hs, skin)
-	# Safety helmet remnant.
-	_draw_rounded_rect(Rect2(-9 * hs, -22 * hs, 18 * hs, 5 * hs), Color(0.55, 0.50, 0.15), 2.0)
-	# Eyes.
-	if state == State.CHASE or state == State.ATTACK:
-		_draw_circle(Vector2(-3.5 * hs, -16 * hs), 2.5 * hs, Color(0.95, 0.30, 0.20))
-		_draw_circle(Vector2(3.5 * hs, -16 * hs), 2.5 * hs, Color(0.95, 0.30, 0.20))
-	else:
-		_draw_circle(Vector2(-3.5 * hs, -16 * hs), 1.8 * hs, Color(0.55, 0.20, 0.15))
-		_draw_circle(Vector2(3.5 * hs, -16 * hs), 1.8 * hs, Color(0.55, 0.20, 0.15))
-
-
-## Fast / runner — lean, thin, long limbs, ragged clothes.
-func _draw_fast(body: Color, skin: Color, s: float, dir: Vector2) -> void:
-	var fs := s * 0.9
-	# Thin legs.
-	_draw_rounded_rect(Rect2(-6 * fs, 2 * fs, 4 * fs, 12 * fs), body.darkened(0.1), 1.0)
-	_draw_rounded_rect(Rect2(2 * fs, 2 * fs, 4 * fs, 12 * fs), body.darkened(0.1), 1.0)
-	# Skinny torso — tattered hoodie.
-	var hoodie := Color(0.35, 0.18, 0.15)
-	_draw_rounded_rect(Rect2(-8 * fs, -9 * fs, 16 * fs, 12 * fs), hoodie, 1.5)
-	# Hoodie strings.
-	draw_line(Vector2(-2 * fs, -9 * fs), Vector2(-2 * fs, -4 * fs), Color(0.6, 0.55, 0.5), 1.0)
-	draw_line(Vector2(2 * fs, -9 * fs), Vector2(2 * fs, -4 * fs), Color(0.6, 0.55, 0.5), 1.0)
-	# Long reaching arms.
-	var reach := dir * 14.0 * fs
-	_draw_rounded_rect(Rect2(-12 * fs, -7 * fs, 3.5 * fs, 11 * fs), skin.darkened(0.15), 1.0)
-	_draw_rounded_rect(Rect2(8.5 * fs, -7 * fs, 3.5 * fs, 11 * fs), skin.darkened(0.15), 1.0)
-	_draw_circle(Vector2(-10.25 * fs, 4 * fs) + dir * 4.0 * fs, 2.5 * fs, skin.darkened(0.15))
-	_draw_circle(Vector2(10.25 * fs, 4 * fs) + dir * 4.0 * fs, 2.5 * fs, skin.darkened(0.15))
-	# Head — gaunt, sunken.
-	_draw_circle(Vector2(0, -14 * fs), 6.5 * fs, skin)
-	# Hollow cheeks.
-	_draw_circle(Vector2(-3 * fs, -13 * fs), 2.0 * fs, skin.darkened(0.3))
-	_draw_circle(Vector2(3 * fs, -13 * fs), 2.0 * fs, skin.darkened(0.3))
-	# Eyes.
-	if state == State.CHASE or state == State.ATTACK:
-		_draw_circle(Vector2(-2.5 * fs, -15 * fs), 1.8 * fs, Color(0.95, 0.40, 0.20))
-		_draw_circle(Vector2(2.5 * fs, -15 * fs), 1.8 * fs, Color(0.95, 0.40, 0.20))
-	else:
-		_draw_circle(Vector2(-2.5 * fs, -15 * fs), 1.2 * fs, Color(0.50, 0.22, 0.15))
-		_draw_circle(Vector2(2.5 * fs, -15 * fs), 1.2 * fs, Color(0.50, 0.22, 0.15))
-
-
-## Special / infected — biohazard appearance, glowing veins, bloated.
-func _draw_special(body: Color, skin: Color, s: float, dir: Vector2) -> void:
-	var ss := s * 1.1
-	# Bloated legs.
-	_draw_rounded_rect(Rect2(-9 * ss, 2 * ss, 7 * ss, 11 * ss), body.darkened(0.05), 1.5)
-	_draw_rounded_rect(Rect2(2 * ss, 2 * ss, 7 * ss, 11 * ss), body.darkened(0.05), 1.5)
-	# Bloated torso — hospital gown remnant.
-	var gown := Color(0.25, 0.35, 0.38)
-	_draw_rounded_rect(Rect2(-12 * ss, -10 * ss, 24 * ss, 14 * ss), gown, 2.0)
-	# Biohazard veins (glowing lines across torso).
-	_draw_circle(Vector2(-5 * ss, -4 * ss), 1.5 * ss, Color(0.2, 0.8, 0.3, 0.7))
-	_draw_circle(Vector2(3 * ss, -2 * ss), 1.5 * ss, Color(0.2, 0.8, 0.3, 0.7))
-	_draw_circle(Vector2(-1 * ss, 1 * ss), 1.5 * ss, Color(0.2, 0.8, 0.3, 0.7))
-	draw_line(Vector2(-5 * ss, -4 * ss), Vector2(3 * ss, -2 * ss), Color(0.2, 0.7, 0.3, 0.5), 1.0)
-	draw_line(Vector2(3 * ss, -2 * ss), Vector2(-1 * ss, 1 * ss), Color(0.2, 0.7, 0.3, 0.5), 1.0)
-	# Arms.
-	_draw_rounded_rect(Rect2(-15 * ss, -7 * ss, 4 * ss, 11 * ss), skin.darkened(0.1), 1.0)
-	_draw_rounded_rect(Rect2(11 * ss, -7 * ss, 4 * ss, 11 * ss), skin.darkened(0.1), 1.0)
-	_draw_circle(Vector2(-13 * ss, 4 * ss) + dir * 3.0 * ss, 3.5 * ss, skin.darkened(0.15))
-	_draw_circle(Vector2(13 * ss, 4 * ss) + dir * 3.0 * ss, 3.5 * ss, skin.darkened(0.15))
-	# Head — swollen, exposed skull.
-	_draw_circle(Vector2(0, -15 * ss), 8.5 * ss, skin)
-	# Exposed skull patch.
-	_draw_circle(Vector2(0, -20 * ss), 4.0 * ss, skin.darkened(0.4))
-	# Eyes — green glow.
-	if state == State.CHASE or state == State.ATTACK:
-		_draw_circle(Vector2(-3 * ss, -16 * ss), 2.2 * ss, Color(0.3, 0.95, 0.3))
-		_draw_circle(Vector2(3 * ss, -16 * ss), 2.2 * ss, Color(0.3, 0.95, 0.3))
-	else:
-		_draw_circle(Vector2(-3 * ss, -16 * ss), 1.5 * ss, Color(0.2, 0.5, 0.2))
-		_draw_circle(Vector2(3 * ss, -16 * ss), 1.5 * ss, Color(0.2, 0.5, 0.2))
-
-
-func _draw_corpse(body: Color, skin: Color) -> void:
-	var dir := facing.normalized()
-	_draw_circle(Vector2(2, 4), 14.0, Color(0, 0, 0, 0.25))
-	_draw_rounded_rect(Rect2(-10, -5, 20, 10), body, 2.0)
-	_draw_circle(Vector2(-8, -6), 6.5, skin)
-	draw_line(Vector2(-10, -2), Vector2(-18, -8), skin.darkened(0.1), 2.5)
-	draw_line(Vector2(8, -1), Vector2(16, 8), skin.darkened(0.1), 2.5)
-	draw_line(Vector2(-3, 5), Vector2(-8, 14), body.darkened(0.3), 3.0)
-	draw_line(Vector2(3, 5), Vector2(8, 14), body.darkened(0.3), 3.0)
-	_draw_circle(Vector2(0, 8), 7.0, Color(0.4, 0.08, 0.06, 0.45))
-
-
-func _refresh_variant_colors() -> void:
-	match visual_variant:
-		ZombieVariant.STANDARD:
-			_body_color = Color(0.36, 0.44, 0.33)
-			_skin_color = Color(0.55, 0.63, 0.48)
-			_clothes_color = Color(0.30, 0.32, 0.28)
-			_body_scale = 1.0
-		ZombieVariant.HEAVY:
-			_body_color = Color(0.32, 0.30, 0.28)
-			_skin_color = Color(0.50, 0.45, 0.40)
-			_clothes_color = Color(0.25, 0.24, 0.22)
-			_body_scale = 1.3
-		ZombieVariant.FAST:
-			_body_color = Color(0.40, 0.38, 0.35)
-			_skin_color = Color(0.60, 0.55, 0.50)
-			_clothes_color = Color(0.35, 0.18, 0.15)
-			_body_scale = 0.85
-		ZombieVariant.SPECIAL:
-			_body_color = Color(0.30, 0.38, 0.30)
-			_skin_color = Color(0.50, 0.55, 0.45)
-			_clothes_color = Color(0.25, 0.35, 0.38)
-			_body_scale = 1.15
-
-
-# --- tiny drawing helpers --------------------------------------------------
-
-func _draw_circle(center: Vector2, radius: float, color: Color) -> void:
-	draw_circle(center, radius, color)
-
-
-func _draw_rounded_rect(rect: Rect2, color: Color, radius: float) -> void:
-	draw_rect(rect, color, true)
-	_draw_circle(Vector2(rect.position.x + radius, rect.position.y + radius), radius, color)
-	_draw_circle(Vector2(rect.end.x - radius, rect.position.y + radius), radius, color)
-	_draw_circle(Vector2(rect.position.x + radius, rect.end.y - radius), radius, color)
-	_draw_circle(Vector2(rect.end.x - radius, rect.end.y - radius), radius, color)

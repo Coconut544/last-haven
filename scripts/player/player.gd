@@ -9,6 +9,10 @@ extends CharacterBody2D
 ## Movement input comes from two sources that are merged here: the on-screen
 ## joystick calls `set_move_input()` and the keyboard actions are read directly,
 ## which keeps desktop testing possible without a separate code path.
+##
+## Visual rendering is delegated to a CharacterAnimator child node. To swap
+## character models or animation systems, replace the animator node — the
+## Player script never draws anything directly.
 
 signal died()
 signal respawned()
@@ -20,6 +24,7 @@ const BASE_ATTACK_RANGE := 26.0
 ## Sprint is noisy; a zombie can hear it from here.
 const SPRINT_NOISE_RADIUS := 190.0
 const ATTACK_NOISE_RADIUS := 210.0
+const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/combat/DamageNumber.tscn")
 
 @export var walk_speed: float = 108.0
 @export var run_speed: float = 178.0
@@ -34,14 +39,22 @@ const ATTACK_NOISE_RADIUS := 210.0
 @onready var hurtbox: Hurtbox = $Hurtbox
 @onready var build_system: BuildSystem = $BuildSystem
 
+## The character animator responsible for all visual rendering.
+## Set to ProceduralCharacterAnimator by default; swap for any
+## CharacterAnimator subclass to change the character's appearance.
+var character_animator: CharacterAnimator
+
 ## Vector set by the virtual joystick (already normalized, length 0..1).
 var move_input: Vector2 = Vector2.ZERO
 var facing: Vector2 = Vector2.DOWN
-## Inventory slot currently selected on the hotbar (slots 0-4 are the hotbar).
+## Inventory slot currently selected on the hotbar (slots 0-7 are the hotbar).
 var active_slot: int = 0
 ## Modular appearance: slot name -> item id. Empty slots fall back to defaults.
 var equipment: Dictionary = {}
 var is_dead: bool = false
+
+## Equipment component manages gear slots with stat bonuses.
+var equipment_component: EquipmentComponent
 
 var _attack_cooldown: float = 0.0
 var _attack_flash: float = 0.0
@@ -52,10 +65,18 @@ var _gather_duration: float = 1.0
 var _interaction_timer: float = 0.0
 var _sprint_noise_timer: float = 0.0
 var _last_facing: Vector2 = Vector2.DOWN
+var _screen_shake_amount: float = 0.0
+var _screen_shake_timer: float = 0.0
 
 
 func _ready() -> void:
 	add_to_group("player")
+	# Create equipment component if not already in scene tree.
+	equipment_component = EquipmentComponent.new()
+	equipment_component.name = "Equipment"
+	add_child(equipment_component)
+	# Create the character animator (ProceduralCharacterAnimator by default).
+	_setup_animator()
 	stats.setup(health)
 	build_system.set_inventory(inventory_component)
 	health.damaged.connect(_on_damaged)
@@ -67,6 +88,29 @@ func _ready() -> void:
 	GameEvents.noise_emitted.connect(_on_noise)
 	stats.emit_all()
 	_on_health_changed(health.current_health, health.max_health)
+
+
+func _setup_animator() -> void:
+	# If an animator already exists in the scene (from the .tscn), use it.
+	var existing := get_node_or_null("CharacterAnimator") as CharacterAnimator
+	if existing != null:
+		character_animator = existing
+		return
+	# Otherwise create the default procedural animator.
+	character_animator = ProceduralCharacterAnimator.new()
+	character_animator.name = "CharacterAnimator"
+	add_child(character_animator)
+
+
+## Swaps the character animator at runtime.
+## Pass any CharacterAnimator subclass to change the character's appearance.
+func set_animator(new_animator: CharacterAnimator) -> void:
+	if character_animator != null and is_instance_valid(character_animator):
+		character_animator.queue_free()
+	character_animator = new_animator
+	character_animator.name = "CharacterAnimator"
+	add_child(character_animator)
+	queue_redraw()
 
 
 # --- input --------------------------------------------------------------------
@@ -92,13 +136,23 @@ func _physics_process(delta: float) -> void:
 	_attack_cooldown = maxf(0.0, _attack_cooldown - delta)
 	if _attack_flash > 0.0:
 		_attack_flash -= delta
-		queue_redraw()
+
+	# Screen shake decay.
+	if _screen_shake_timer > 0.0:
+		_screen_shake_timer -= delta
+		_screen_shake_amount = lerpf(_screen_shake_amount, 0.0, delta * 12.0)
+		_apply_screen_shake()
 
 	var input_vector := _read_move_input()
 	_handle_movement(input_vector, delta)
 	_update_gathering(delta)
 	_tick_interaction(delta)
 	_tick_actions(delta)
+
+	# Update the animator with the latest player state.
+	if character_animator != null:
+		character_animator.update_from_player(self)
+		character_animator.queue_redraw()
 
 
 func _handle_movement(input_vector: Vector2, delta: float) -> void:
@@ -122,7 +176,6 @@ func _handle_movement(input_vector: Vector2, delta: float) -> void:
 		facing = input_vector.normalized()
 		if facing != _last_facing:
 			_last_facing = facing
-			queue_redraw()
 
 
 func _wants_to_sprint(input_vector: Vector2) -> bool:
@@ -180,22 +233,99 @@ func attack() -> bool:
 		if item.attack_damage > 0.0:
 			damage = item.attack_damage
 			cooldown = item.attack_cooldown
-		reach = item.attack_range
+			reach = item.attack_range
+	# Apply equipment weapon bonus.
+	damage += equipment_component.bonus_attack_damage
 	_attack_cooldown = maxf(0.15, cooldown)
 	_attack_flash = 0.2
 	attack_hitbox.reach = reach
 	attack_hitbox.activate(facing, damage)
+	_consume_tool_durability()
 	cancel_gathering()
 	GameEvents.noise_emitted.emit(global_position, ATTACK_NOISE_RADIUS, self)
 	queue_redraw()
 	return true
 
 
+## Consumes 1 durability from the active tool. Breaks it when depleted.
+func _consume_tool_durability() -> void:
+	var inventory := get_inventory()
+	if inventory == null:
+		return
+	var stack := inventory.get_slot(active_slot)
+	if stack == null:
+		return
+	var definition := stack.get_definition()
+	if definition == null or definition.durability <= 0:
+		return
+	stack.durability -= 1
+	if stack.durability <= 0:
+		# Tool breaks.
+		inventory.take_from_slot(active_slot, 1)
+		GameEvents.toast_requested.emit("%s broke!" % definition.display_name)
+		if inventory.get_slot(active_slot) == null:
+			# Move to next occupied slot.
+			for i in inventory.slot_count:
+				if inventory.get_slot(i) != null:
+					active_slot = i
+					break
+		GameEvents.hotbar_changed.emit(active_slot)
+		queue_redraw()
+
+
+## Returns the current durability of the active item (-1 if no durability system).
+func get_active_durability() -> int:
+	var inventory := get_inventory()
+	if inventory == null:
+		return -1
+	var stack := inventory.get_slot(active_slot)
+	if stack == null:
+		return -1
+	var definition := stack.get_definition()
+	if definition == null or definition.durability <= 0:
+		return -1
+	return stack.durability
+
+
 func _on_damaged(info: DamageInfo) -> void:
 	if info == null:
 		return
 	cancel_gathering()
+	# Screen shake on player damage.
+	_trigger_screen_shake(0.12, 4.0)
+	# Spawn damage number.
+	_spawn_damage_number(info.amount, false)
 	queue_redraw()
+
+
+## Spawns a floating damage number near the player.
+func _spawn_damage_number(damage: float, heal: bool = false) -> void:
+	if DAMAGE_NUMBER_SCENE == null:
+		return
+	var number := DAMAGE_NUMBER_SCENE.instantiate() as DamageNumber
+	if number == null:
+		return
+	number.setup(damage, heal)
+	# Offset slightly above the player.
+	number.position = position + Vector2(randf_range(-10, 10), -30)
+	get_tree().current_scene.add_child(number)
+
+
+func _trigger_screen_shake(duration: float, intensity: float) -> void:
+	_screen_shake_amount = intensity
+	_screen_shake_timer = duration
+
+
+func _apply_screen_shake() -> void:
+	var camera := get_node_or_null("Camera2D") as Camera2D
+	if camera == null:
+		return
+	camera.offset = Vector2(
+		randf_range(-_screen_shake_amount, _screen_shake_amount),
+		randf_range(-_screen_shake_amount, _screen_shake_amount)
+	)
+	if _screen_shake_timer <= 0.0:
+		camera.offset = Vector2.ZERO
 
 
 # --- interaction / gathering --------------------------------------------------
@@ -339,6 +469,8 @@ func equip_from_slot(index: int) -> void:
 	equipment["tool"] = definition.id
 	if definition.category == ItemDefinition.Category.WEAPON:
 		equipment["weapon"] = definition.id
+	# Auto-equip into the equipment system.
+	equipment_component.auto_equip(definition.id)
 	queue_redraw()
 
 
@@ -424,6 +556,11 @@ func reset_for_new_game(spawn_position: Vector2) -> void:
 	is_dead = false
 	active_slot = 0
 	equipment.clear()
+	if equipment_component != null:
+		equipment_component.equipped.clear()
+		for slot: String in EquipmentComponent.SLOT_NAMES:
+			equipment_component.equipped[slot] = ""
+		equipment_component._recalculate_bonuses()
 	_attack_cooldown = 0.0
 	_attack_flash = 0.0
 	cancel_gathering()
@@ -471,6 +608,7 @@ func serialize_state() -> Dictionary:
 		"inventory": inventory.to_dict() if inventory != null else {},
 		"active_slot": active_slot,
 		"equipment": equipment.duplicate(),
+		"equipment_component": equipment_component.serialize_state() if equipment_component != null else {},
 		"facing": [facing.x, facing.y],
 	}
 
@@ -497,6 +635,8 @@ func apply_state(state: Dictionary) -> void:
 	var saved_equipment: Variant = state.get("equipment", {})
 	if typeof(saved_equipment) == TYPE_DICTIONARY:
 		equipment = (saved_equipment as Dictionary).duplicate()
+	if equipment_component != null:
+		equipment_component.apply_state(state.get("equipment_component", {}))
 
 	is_dead = not health.is_alive()
 	GameEvents.hotbar_changed.emit(active_slot)
@@ -508,200 +648,3 @@ func apply_state(state: Dictionary) -> void:
 func _item_label(item_id: String) -> String:
 	var definition := ItemDatabase.get_item(item_id)
 	return definition.display_name if definition != null else item_id
-
-
-func _color_for(slot: String, fallback: Color) -> Color:
-	var item_id := str(equipment.get(slot, ""))
-	if item_id.is_empty():
-		return fallback
-	var definition := ItemDatabase.get_item(item_id)
-	return definition.icon_color if definition != null else fallback
-
-
-# --- visuals ---------------------------------------------------------------
-
-## Skin / clothing colours derived from equipment.
-var _skin := Color(0.78, 0.62, 0.5)
-var _shirt := Color(0.33, 0.39, 0.34)
-var _pants := Color(0.22, 0.24, 0.29)
-var _hair := Color(0.16, 0.13, 0.11)
-var _boots := Color(0.22, 0.17, 0.13)
-var _belt := Color(0.28, 0.22, 0.16)
-
-
-func _draw() -> void:
-	if is_dead:
-		_draw_corpse()
-		return
-	_refresh_colors()
-	var dir := facing.normalized()
-	var facing_angle := dir.angle()
-
-	# Shadow.
-	_draw_circle(Vector2(0, 14), 15.0, Color(0, 0, 0, 0.20))
-
-	# --- legs & boots (closer to camera) -----------------------------------
-	var leg_w := 5.0
-	var leg_h := 10.0
-	var leg_y := 2.0
-	var boot_h := 3.5
-	# Left leg.
-	_draw_rounded_rect(Rect2(-8.5, leg_y, leg_w, leg_h), _pants, 1.5)
-	_draw_rounded_rect(Rect2(-8.5, leg_y + leg_h, leg_w, boot_h), _boots, 1.5)
-	# Right leg.
-	_draw_rounded_rect(Rect2(3.5, leg_y, leg_w, leg_h), _pants, 1.5)
-	_draw_rounded_rect(Rect2(3.5, leg_y + leg_h, leg_w, boot_h), _boots, 1.5)
-	# Belt.
-	draw_rect(Rect2(-10, -1, 20, 3.0), _belt, true)
-	draw_circle(Vector2(0, 0.5), 2.0, Color(0.6, 0.55, 0.4))
-
-	# --- torso (jacket) -----------------------------------------------------
-	var jacket := _shirt
-	_draw_rounded_rect(Rect2(-11, -11, 22, 13), jacket, 2.0)
-	# Collar.
-	draw_line(Vector2(-5, -11), Vector2(5, -11), jacket.lightened(0.15), 1.5)
-	# Zipper / seam line.
-	draw_line(Vector2(0, -11), Vector2(0, 2), jacket.darkened(0.25), 1.0)
-	# Pocket hints.
-	draw_rect(Rect2(-9, -3, 7, 5), jacket.darkened(0.08), true)
-	draw_rect(Rect2(2, -3, 7, 5), jacket.darkened(0.08), true)
-
-	# --- arms (behind weapon hand) ------------------------------------------
-	var arm_w := 4.0
-	var arm_h := 9.0
-	var left_arm_x := -14.0
-	var right_arm_x := 10.0
-	var arm_y := -8.0
-	# Left arm.
-	_draw_rounded_rect(Rect2(left_arm_x, arm_y, arm_w, arm_h), _shirt.darkened(0.10), 1.5)
-	_draw_circle(Vector2(left_arm_x + arm_w * 0.5, arm_y + arm_h + 1), 2.5, _skin)
-	# Right arm (holds weapon).
-	_draw_rounded_rect(Rect2(right_arm_x, arm_y, arm_w, arm_h), _shirt.darkened(0.10), 1.5)
-	_draw_circle(Vector2(right_arm_x + arm_w * 0.5, arm_y + arm_h + 1), 2.5, _skin)
-
-	# --- backpack (if equipped, drawn behind torso) --------------------------
-	var backpack_id := str(equipment.get("backpack", ""))
-	if not backpack_id.is_empty():
-		var bp_color := _color_for("backpack", Color(0.40, 0.33, 0.22))
-		_draw_rounded_rect(Rect2(-8, -14, 16, 10), bp_color.darkened(0.15), 2.0)
-		_draw_rounded_rect(Rect2(-6, -12, 12, 6), bp_color, 2.0)
-		# Buckle.
-		draw_circle(Vector2(0, -12), 1.5, Color(0.55, 0.50, 0.40))
-
-	# --- head ----------------------------------------------------------------
-	var head_pos := Vector2(0, -16)
-	_draw_circle(head_pos, 8.0, _skin)
-	# Hair (top of head).
-	_draw_rounded_rect(Rect2(-8, -24.5, 16, 6.5), _hair, 2.5)
-	# Side hair.
-	_draw_rounded_rect(Rect2(-8, -21, 3, 5), _hair.darkened(0.08), 1.0)
-	_draw_rounded_rect(Rect2(5, -21, 3, 5), _hair.darkened(0.08), 1.0)
-	# Face direction dot.
-	var face_pos := head_pos + dir * 5.0
-	draw_circle(face_pos, 1.6, Color(0.12, 0.10, 0.10))
-	# Eyes hint (two tiny dots offset from face direction).
-	var perp := Vector2(-dir.y, dir.x)
-	_draw_circle(face_pos + perp * 2.2 - dir * 1.5, 1.1, Color(0.10, 0.08, 0.08))
-	_draw_circle(face_pos - perp * 2.2 - dir * 1.5, 1.1, Color(0.10, 0.08, 0.08))
-
-	# --- held item -----------------------------------------------------------
-	_draw_held_item()
-	_draw_attack_flash()
-
-
-func _draw_held_item() -> void:
-	var item := get_active_item()
-	if item == null:
-		return
-	var direction := facing.normalized()
-	var origin := direction * 13.0 + Vector2(10, -5) # right hand area
-	if item.category == ItemDefinition.Category.WEAPON or item.tool_type != ItemDefinition.ToolType.NONE:
-		# Handle.
-		var handle_end := origin + direction * 6.0
-		draw_line(origin, handle_end, Color(0.35, 0.26, 0.16), 2.5)
-		# Head / blade.
-		if item.tool_type == ItemDefinition.ToolType.AXE:
-			# Axe head.
-			draw_circle(handle_end + direction * 3.0, 4.5, Color(0.5, 0.5, 0.52))
-			draw_line(handle_end, handle_end + direction * 3.0, Color(0.45, 0.45, 0.48), 2.0)
-		elif item.tool_type == ItemDefinition.ToolType.KNIFE:
-			# Knife blade.
-			draw_line(handle_end, handle_end + direction * 8.0, Color(0.65, 0.65, 0.7), 2.0)
-		elif item.tool_type == ItemDefinition.ToolType.PICKAXE:
-			# Pickaxe head.
-			var perp := Vector2(-direction.y, direction.x)
-			draw_line(handle_end + perp * 5, handle_end - perp * 5, Color(0.5, 0.5, 0.52), 3.0)
-		elif item.tool_type == ItemDefinition.ToolType.HAMMER:
-			# Hammer head.
-			draw_rect(Rect2(handle_end.x - 4, handle_end.y - 3, 8, 6), Color(0.48, 0.48, 0.5), true)
-		else:
-			# Generic weapon.
-			draw_circle(handle_end, 4.0, item.icon_color)
-	else:
-		# Consumable or misc held item.
-		draw_circle(origin, 4.5, item.icon_color)
-
-
-func _draw_attack_flash() -> void:
-	if _attack_flash <= 0.0:
-		return
-	var direction := facing.normalized()
-	var start_angle := direction.angle() - 0.8
-	var end_angle := direction.angle() + 0.8
-	var points := PackedVector2Array()
-	for step in 10:
-		var a := lerpf(start_angle, end_angle, float(step) / 9.0)
-		points.append(Vector2.RIGHT.rotated(a) * (attack_hitbox.reach + 4.0))
-	var alpha := clampf(_attack_flash * 5.0, 0.0, 0.85)
-	draw_polyline(points, Color(1.0, 0.95, 0.8, alpha), 2.5)
-	# Slash arc fill.
-	var arc_points := PackedVector2Array([Vector2.ZERO])
-	for step in 12:
-		var a := lerpf(start_angle, end_angle, float(step) / 11.0)
-		arc_points.append(Vector2.RIGHT.rotated(a) * (attack_hitbox.reach - 4.0))
-	draw_colored_polygon(arc_points, Color(1.0, 0.92, 0.75, alpha * 0.25))
-
-
-func _draw_corpse() -> void:
-	var dir := facing.normalized()
-	var corpse_color := Color(0.28, 0.26, 0.24)
-	var skin_color := Color(0.60, 0.48, 0.38)
-	# Shadow.
-	_draw_circle(Vector2(2, 4), 14.0, Color(0, 0, 0, 0.25))
-	# Body (lying on side).
-	_draw_rounded_rect(Rect2(-10, -5, 20, 10), corpse_color, 2.0)
-	# Head.
-	_draw_circle(Vector2(-8, -6), 6.5, skin_color)
-	# Arms sprawled.
-	draw_line(Vector2(-10, -2), Vector2(-18, -8), Color(0.55, 0.45, 0.38), 2.5)
-	draw_line(Vector2(8, -1), Vector2(16, 8), Color(0.55, 0.45, 0.38), 2.5)
-	# Legs.
-	draw_line(Vector2(-3, 5), Vector2(-8, 14), Color(0.20, 0.19, 0.18), 3.0)
-	draw_line(Vector2(3, 5), Vector2(8, 14), Color(0.20, 0.19, 0.18), 3.0)
-	# Blood pool.
-	_draw_circle(Vector2(0, 8), 8.0, Color(0.35, 0.08, 0.06, 0.45))
-
-
-# --- tiny drawing helpers --------------------------------------------------
-
-func _refresh_colors() -> void:
-	_skin = Color(0.78, 0.62, 0.5)
-	_shirt = _color_for("shirt", Color(0.33, 0.39, 0.34))
-	_pants = _color_for("pants", Color(0.22, 0.24, 0.29))
-	_hair = _color_for("hair", Color(0.16, 0.13, 0.11))
-	_boots = _color_for("boots", Color(0.22, 0.17, 0.13))
-	_belt = Color(0.28, 0.22, 0.16)
-
-
-func _draw_circle(center: Vector2, radius: float, color: Color) -> void:
-	draw_circle(center, radius, color)
-
-
-func _draw_rounded_rect(rect: Rect2, color: Color, radius: float) -> void:
-	# Approximate rounded rect with polygon for _draw compatibility.
-	draw_rect(rect, color, true)
-	# Corners.
-	_draw_circle(Vector2(rect.position.x + radius, rect.position.y + radius), radius, color)
-	_draw_circle(Vector2(rect.end.x - radius, rect.position.y + radius), radius, color)
-	_draw_circle(Vector2(rect.position.x + radius, rect.end.y - radius), radius, color)
-	_draw_circle(Vector2(rect.end.x - radius, rect.end.y - radius), radius, color)

@@ -1,6 +1,7 @@
 class_name InventoryPanel
 extends Control
 ## Backpack UI plus the container side used for loot bags and storage crates.
+## Also shows equipped gear with slot labels and stat bonuses.
 ##
 ## The panel only reads/writes Inventory data through the player and the opened
 ## container, and it closes itself when the player walks away (the player emits
@@ -27,6 +28,11 @@ var _selected_index: int = -1
 var _slots: Array[ItemSlotButton] = []
 var _container_slots: Array[ItemSlotButton] = []
 
+## Equipment display (created dynamically).
+var _equipment_column: VBoxContainer
+var _equipment_labels: Dictionary = {}
+var _equipment_stat_label: Label
+
 
 func _ready() -> void:
 	visible = false
@@ -40,6 +46,7 @@ func _ready() -> void:
 	GameEvents.container_opened.connect(_on_container_opened)
 	GameEvents.container_closed.connect(_on_container_closed)
 	GameEvents.inventory_changed.connect(_on_inventory_changed)
+	_build_equipment_column()
 
 
 ## Called once by the HUD when the session starts.
@@ -76,6 +83,82 @@ func is_open() -> bool:
 	return visible
 
 
+# --- equipment column ---------------------------------------------------------
+
+func _build_equipment_column() -> void:
+	_equipment_column = VBoxContainer.new()
+	_equipment_column.name = "EquipmentColumn"
+	_equipment_column.add_theme_constant_override("separation", 6)
+	_equipment_column.custom_minimum_size = Vector2(140, 0)
+
+	var title := Label.new()
+	title.text = "Equipment"
+	title.add_theme_font_size_override("font_size", 20)
+	_equipment_column.add_child(title)
+
+	var slot_names: Array[String] = ["head", "body", "backpack", "weapon", "tool"]
+	for slot_name: String in slot_names:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		_equipment_column.add_child(row)
+
+		var label := Label.new()
+		label.text = slot_name.capitalize() + ":"
+		label.add_theme_font_size_override("font_size", 13)
+		label.custom_minimum_size = Vector2(65, 0)
+		row.add_child(label)
+
+		var value_label := Label.new()
+		value_label.text = "Empty"
+		value_label.add_theme_font_size_override("font_size", 13)
+		value_label.add_theme_color_override("font_color", Color(0.55, 0.55, 0.5))
+		value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(value_label)
+		_equipment_labels[slot_name] = value_label
+
+	# Stat bonuses summary.
+	_equipment_stat_label = Label.new()
+	_equipment_stat_label.add_theme_font_size_override("font_size", 12)
+	_equipment_stat_label.add_theme_color_override("font_color", Color(0.45, 0.55, 0.40))
+	_equipment_stat_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_equipment_column.add_child(_equipment_stat_label)
+
+	# Insert equipment column into the layout.
+	var columns := get_node_or_null("Window/Margin/Layout/Columns")
+	if columns != null:
+		columns.add_child(_equipment_column)
+		# Move equipment column to the right side (after backpack, before container).
+		columns.move_child(_equipment_column, 1)
+
+
+func _update_equipment_display() -> void:
+	if _player == null or _player.equipment_component == null:
+		return
+	var ec := _player.equipment_component
+	for slot_name: String in EquipmentComponent.SLOT_NAMES:
+		var label: Label = _equipment_labels.get(slot_name, null)
+		if label == null:
+			continue
+		var item_id := ec.get_equipped(slot_name)
+		if item_id.is_empty():
+			label.text = "Empty"
+			label.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
+		else:
+			var def := ItemDatabase.get_item(item_id)
+			label.text = def.display_name if def != null else item_id
+			label.add_theme_color_override("font_color", Color(0.85, 0.82, 0.75))
+
+	# Show stat bonuses.
+	var bonus_text := ""
+	if ec.bonus_capacity > 0:
+		bonus_text += " +%d capacity" % ec.bonus_capacity
+	if ec.bonus_damage_reduction > 0.0:
+		bonus_text += "  -%.0f%% damage" % (ec.bonus_damage_reduction * 100.0)
+	if ec.bonus_attack_damage > 0.0:
+		bonus_text += "  +%.0f attack" % ec.bonus_attack_damage
+	_equipment_stat_label.text = bonus_text if not bonus_text.is_empty() else "No bonuses"
+
+
 # --- building the grids -------------------------------------------------------
 
 func _rebuild() -> void:
@@ -83,6 +166,7 @@ func _rebuild() -> void:
 	_build_container_grid()
 	_update_summary()
 	_update_action_buttons()
+	_update_equipment_display()
 
 
 func _build_player_grid() -> void:
@@ -124,8 +208,12 @@ func _update_summary() -> void:
 	if inventory == null:
 		summary_label.text = "No inventory"
 		return
-	summary_label.text = "%d/%d slots used - %.1f kg" % [
-		_count_used_slots(inventory), inventory.slot_count, inventory.total_weight()]
+	var bonus := 0
+	if _player != null and _player.equipment_component != null:
+		bonus = _player.equipment_component.bonus_capacity
+	var extra := " (+%d equipped)" % bonus if bonus > 0 else ""
+	summary_label.text = "%d/%d%s slots used - %.1f kg" % [
+		_count_used_slots(inventory), inventory.slot_count, extra, inventory.total_weight()]
 
 
 func _count_used_slots(inventory: Inventory) -> int:
@@ -277,6 +365,7 @@ func _on_inventory_changed(_inventory: Inventory) -> void:
 			button.setup(_container_inventory.get_slot(button.slot_index), button.slot_index)
 	_update_summary()
 	_update_action_buttons()
+	_update_equipment_display()
 
 
 func _get_inventory() -> Inventory:

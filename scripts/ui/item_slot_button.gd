@@ -5,6 +5,8 @@ extends Button
 ## Built in code and reused by the hotbar, the backpack grid and the container
 ## grid so every slot looks and behaves the same. The icon is a colour chip from
 ## the item definition until real item art exists.
+##
+## Now also displays a durability bar for tools/weapons that have durability.
 
 signal slot_pressed(index: int)
 
@@ -17,6 +19,8 @@ var selected: bool = false
 var _chip: ColorRect
 var _name_label: Label
 var _count_label: Label
+var _durability_bar: ColorRect
+var _durability_bg: ColorRect
 
 
 func _init() -> void:
@@ -46,6 +50,21 @@ func _init() -> void:
 	_count_label.add_theme_font_size_override("font_size", 13)
 	add_child(_count_label)
 
+	# Durability bar (visible only for items with durability).
+	_durability_bg = ColorRect.new()
+	_durability_bg.name = "DurabilityBg"
+	_durability_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_durability_bg.color = Color(0.15, 0.15, 0.15, 0.7)
+	_durability_bg.visible = false
+	add_child(_durability_bg)
+
+	_durability_bar = ColorRect.new()
+	_durability_bar.name = "DurabilityBar"
+	_durability_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_durability_bar.color = Color(0.35, 0.75, 0.35)
+	_durability_bar.visible = false
+	add_child(_durability_bar)
+
 	pressed.connect(func() -> void: slot_pressed.emit(slot_index))
 
 
@@ -67,6 +86,8 @@ func _refresh() -> void:
 		_chip.color = Color(0.16, 0.17, 0.16, 0.7)
 		_name_label.text = ""
 		_count_label.text = ""
+		_durability_bg.visible = false
+		_durability_bar.visible = false
 	else:
 		var definition := stack.get_definition()
 		var display_name := definition.display_name if definition != null else stack.item_id
@@ -80,14 +101,34 @@ func _refresh() -> void:
 		else:
 			_count_label.text = ""
 		tooltip_text = "%s\n%s" % [display_name, definition.description if definition != null else ""]
+		# Durability bar for items with durability.
+		_update_durability(definition)
 	_apply_selection_style()
 	_layout()
+
+
+func _update_durability(definition: ItemDefinition) -> void:
+	if definition == null or definition.durability <= 0:
+		_durability_bg.visible = false
+		_durability_bar.visible = false
+		return
+	var current_durability: int = stack.durability if stack.durability >= 0 else definition.durability
+	var ratio := clampf(float(current_durability) / float(definition.durability), 0.0, 1.0)
+	_durability_bg.visible = true
+	_durability_bar.visible = true
+	# Color: green -> yellow -> red as durability drops.
+	if ratio > 0.5:
+		_durability_bar.color = Color(0.35, 0.75, 0.35)
+	elif ratio > 0.25:
+		_durability_bar.color = Color(0.85, 0.75, 0.25)
+	else:
+		_durability_bar.color = Color(0.85, 0.30, 0.25)
+	tooltip_text += "\nDurability: %d/%d" % [stack.durability, definition.durability]
 
 
 func _apply_selection_style() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.1, 0.11, 0.1, 0.85)
-	style.set_corner_radius_all(6)
 	style.set_corner_radius_all(6)
 	if selected:
 		style.border_color = Color(0.95, 0.78, 0.35)
@@ -149,3 +190,21 @@ func _layout() -> void:
 	_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_count_label.position = Vector2(width * 0.5, height * 0.74)
 	_count_label.size = Vector2(width * 0.45, 14)
+	# Durability bar (bottom of slot).
+	if _durability_bg.visible:
+		var bar_h := 3.0
+		var bar_y := height - bar_h - 2.0
+		_durability_bg.position = Vector2(3, bar_y)
+		_durability_bg.size = Vector2(width - 6, bar_h)
+		# Calculate fill ratio.
+		var definition: ItemDefinition = null
+		if stack != null and not stack.is_empty():
+			definition = stack.get_definition()
+		if definition != null and definition.durability > 0:
+			var current: int = stack.durability if stack.durability >= 0 else definition.durability
+			var ratio := clampf(float(current) / float(definition.durability), 0.0, 1.0)
+			_durability_bar.position = Vector2(3, bar_y)
+			_durability_bar.size = Vector2((width - 6) * ratio, bar_h)
+		else:
+			_durability_bar.position = Vector2(3, bar_y)
+			_durability_bar.size = Vector2(width - 6, bar_h)

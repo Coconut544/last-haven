@@ -38,6 +38,7 @@ const ZOMBIE_SCENE: PackedScene = preload("res://scenes/enemies/Zombie.tscn")
 @onready var chunk_streamer: ChunkStreamer = $ChunkStreamer
 @onready var enemy_spawner: ZombieSpawner = $EnemySpawner
 @onready var ground: WorldGround = $Ground
+@onready var world_props: WorldProps = $WorldProps
 
 var _rng := RandomNumberGenerator.new()
 var _generated: bool = false
@@ -73,6 +74,8 @@ func generate(seed_value: int = -1) -> void:
 	_generated = true
 	if ground != null:
 		ground.refresh()
+	if world_props != null:
+		world_props.refresh()
 
 
 func _clear_generated() -> void:

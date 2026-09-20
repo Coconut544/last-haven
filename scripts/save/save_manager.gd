@@ -15,7 +15,7 @@ extends Node
 const SAVE_DIR := "user://saves"
 const SAVE_VERSION := 1
 const SAVE_FILE_TEMPLATE := "slot_%d.json"
-const MAX_SLOTS := 3
+const MAX_SLOTS := 5
 
 ## Slot used by the quick save / quick load actions.
 var current_slot: int = 1

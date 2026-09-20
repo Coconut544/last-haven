@@ -1,10 +1,11 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/world/ground.gd" id="2_ground"]
 [ext_resource type="Script" path="res://scripts/world/day_night_cycle.gd" id="3_daynight"]
 [ext_resource type="Script" path="res://scripts/world/chunk_streamer.gd" id="4_streamer"]
 [ext_resource type="Script" path="res://scripts/world/zombie_spawner.gd" id="5_spawner"]
+[ext_resource type="Script" path="res://scripts/world/world_props.gd" id="6_props"]
 
 [node name="World" type="Node2D"]
 y_sort_enabled = true
@@ -14,6 +15,10 @@ generate_on_ready = false
 [node name="Ground" type="Node2D" parent="."]
 z_index = -10
 script = ExtResource("2_ground")
+
+[node name="WorldProps" type="Node2D" parent="."]
+z_index = -5
+script = ExtResource("6_props")
 
 [node name="ResourceNodes" type="Node2D" parent="."]
 y_sort_enabled = true

@@ -4,8 +4,8 @@ extends Node
 ## Run with:
 ##   godot --headless --path . res://tests/TestRunner.tscn
 ##
-## Exits with code 0 when every check passes and 1 when something fails, which is
-## what CI reacts to. Suites cover the data layer, the pure systems and one
+## Exits with code 0 when every check passes and 1 when something fails, which
+## is what CI reacts to. Suites cover the data layer, the pure systems and one
 ## end-to-end pass through the real main scene (world + player + zombie + save).
 ##
 ## The save round trip uses slot 3, a slot reserved for tests.
@@ -27,6 +27,8 @@ func _ready() -> void:
 	_run_save_format_suite()
 	_run_world_suite()
 	_run_streaming_suite()
+	_run_equipment_suite()
+	_run_durability_suite()
 	await _run_integration_suite()
 
 	_finish()
@@ -77,6 +79,20 @@ func _run_item_database_suite() -> void:
 	var axe := ItemDatabase.get_item("axe")
 	check(axe != null and axe.tool_type == ItemDefinition.ToolType.AXE, "axe must be an axe tool")
 	check(ItemDatabase.get_item("does_not_exist") == null, "unknown item lookups must return null")
+
+	# Check new equipment items exist.
+	var helmet := ItemDatabase.get_item("leather_helmet")
+	check(helmet != null, "leather_helmet item exists")
+	check(helmet.equipment_slot == ItemDefinition.EquipmentSlot.HEAD, "leather_helmet goes in HEAD slot")
+	var armor := ItemDatabase.get_item("leather_armor")
+	check(armor != null, "leather_armor item exists")
+	check(armor.equipment_slot == ItemDefinition.EquipmentSlot.BODY, "leather_armor goes in BODY slot")
+	var backpack := ItemDatabase.get_item("military_backpack")
+	check(backpack != null, "military_backpack item exists")
+	check(backpack.equipment_slot == ItemDefinition.EquipmentSlot.BACKPACK, "military_backpack goes in BACKPACK slot")
+	var repair_kit := ItemDatabase.get_item("repair_kit")
+	check(repair_kit != null, "repair_kit item exists")
+	check(repair_kit.category == ItemDefinition.Category.CONSUMABLE, "repair_kit is in CONSUMABLE category")
 	report("items")
 
 
@@ -174,6 +190,12 @@ func _run_crafting_suite() -> void:
 	var before := full.count_all_items()
 	check(not CraftingSystem.craft(axe_recipe, full), "crafting fails when there is no room for the output")
 	check_equal(full.count_all_items(), before, "a failed craft consumes nothing")
+
+	# Equipment recipes exist.
+	check(ItemDatabase.get_recipe("leather_helmet") != null, "leather_helmet recipe exists")
+	check(ItemDatabase.get_recipe("leather_armor") != null, "leather_armor recipe exists")
+	check(ItemDatabase.get_recipe("military_backpack") != null, "military_backpack recipe exists")
+	check(ItemDatabase.get_recipe("repair_kit") != null, "repair_kit recipe exists")
 	report("crafting")
 
 
@@ -343,6 +365,91 @@ func _run_streaming_suite() -> void:
 	report("streaming")
 
 
+func _run_equipment_suite() -> void:
+	print("- systems: Equipment")
+	var ec := EquipmentComponent.new()
+	add_child(ec)
+
+	# Empty by default.
+	for slot: String in EquipmentComponent.SLOT_NAMES:
+		check_equal(ec.get_equipped(slot), "", "slot %s starts empty" % slot)
+
+	# Equip a helmet.
+	var helmet := ItemDatabase.get_item("leather_helmet")
+	check(helmet != null, "leather_helmet definition exists")
+	var previous := ec.equip("head", "leather_helmet")
+	check_equal(previous, "", "head slot was empty before")
+	check_equal(ec.get_equipped("head"), "leather_helmet", "head slot now has helmet")
+	check(ec.bonus_damage_reduction > 0.0, "helmet provides damage reduction")
+
+	# Equip armor.
+	var armor := ItemDatabase.get_item("leather_armor")
+	check(armor != null, "leather_armor definition exists")
+	ec.equip("body", "leather_armor")
+	check(ec.bonus_damage_reduction > 0.1, "armor adds more damage reduction")
+
+	# Auto-equip uses equipment_slot field.
+	ec.unequip("head")
+	ec.unequip("body")
+	ec.unequip("backpack")
+	var auto_result := ec.auto_equip("leather_helmet")
+	check_equal(auto_result, "", "auto_equip puts helmet in head slot (returns empty previous)")
+	check_equal(ec.get_equipped("head"), "leather_helmet", "helmet auto-equipped to head")
+
+	# Equip backpack for capacity bonus.
+	ec.auto_equip("military_backpack")
+	check(ec.bonus_capacity > 0, "backpack provides capacity bonus")
+
+	# Armor reduction.
+	var reduced := ec.apply_armor(20.0)
+	check(reduced < 20.0, "armor reduces incoming damage")
+	check(reduced > 10.0, "armor does not reduce damage to zero")
+
+	# Serialization.
+	var state := ec.serialize_state()
+	check(state.has("head"), "serialized state has head slot")
+	check_equal(state["head"], "leather_helmet", "serialized head slot is correct")
+
+	var ec2 := EquipmentComponent.new()
+	add_child(ec2)
+	ec2.apply_state(state)
+	check_equal(ec2.get_equipped("head"), "leather_helmet", "restored head slot is correct")
+	check(ec2.bonus_damage_reduction > 0.0, "restored damage reduction is applied")
+
+	ec.queue_free()
+	ec2.queue_free()
+	report("equipment")
+
+
+func _run_durability_suite() -> void:
+	print("- systems: Tool Durability")
+	var inventory := Inventory.new(4, "durability_test")
+
+	# Axe has 150 durability.
+	var axe := ItemDatabase.get_item("axe")
+	check(axe != null and axe.durability > 0, "axe has durability")
+
+	# Add an axe and check initial durability.
+	inventory.add_item("axe", 1)
+	var stack := inventory.get_slot(0)
+	check(stack != null, "axe stack exists")
+	check_equal(stack.durability, axe.durability, "new axe starts at full durability")
+
+	# Simulate durability consumption.
+	stack.durability -= 10
+	check_equal(stack.durability, 140, "durability reduced correctly")
+
+	# Knife has durability too.
+	var knife := ItemDatabase.get_item("knife")
+	check(knife != null and knife.durability > 0, "knife has durability")
+
+	# Items without durability return 0.
+	var wood := ItemDatabase.get_item("wood")
+	check(wood != null and wood.durability == 0, "wood has no durability")
+
+	report("durability")
+
+
 func _run_integration_suite() -> void:
 	print("- integration: main scene, combat, survival and saving")
 	var main: Node2D = load("res://scenes/main/Main.tscn").instantiate()
@@ -359,6 +466,10 @@ func _run_integration_suite() -> void:
 	check(world.is_generated(), "the world is generated for the session")
 	check(player.health.is_alive(), "the player starts alive")
 	check_near(player.global_position.x, world.get_spawn_position().x, 1.0, "the player spawns at the camp")
+
+	# Equipment component exists on the player.
+	check(player.equipment_component != null, "player has an equipment component")
+	check(player.equipment_component.get_equipped("head") == "", "head starts empty")
 
 	# Movement: simulate input the way the joystick does.
 	var start_position := player.global_position
@@ -389,9 +500,11 @@ func _run_integration_suite() -> void:
 	check(CraftingSystem.craft(knife_recipe, player.get_inventory()), "crafting a knife from gathered materials works")
 	check_equal(player.get_inventory().count_item("knife"), 1, "the knife is in the inventory")
 
-	# Building: a wall costs materials and creates a structure. The gathering tree
-	# is removed and the player is reset to the cleared spawn area so the spot in
-	# front of them is deterministic.
+	# Equipment: equip the knife and verify the equipment component updates.
+	player.equipment_component.auto_equip("knife")
+	check_equal(player.equipment_component.get_equipped("tool"), "knife", "knife equipped in tool slot")
+
+	# Building: a wall costs materials and creates a structure.
 	tree.queue_free()
 	await get_tree().process_frame
 	player.global_position = world.get_spawn_position()

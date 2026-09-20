@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="Recipe" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/crafting/recipe.gd" id="1_recipe"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_scrap1"]
+script = ExtResource("2_ingredient")
+item_id = "scrap"
+quantity = 5
+
+[sub_resource type="Resource" id="Ingredient_cloth1"]
+script = ExtResource("2_ingredient")
+item_id = "cloth"
+quantity = 4
+
+[sub_resource type="Resource" id="Ingredient_fiber1"]
+script = ExtResource("2_ingredient")
+item_id = "fiber"
+quantity = 3
+
+[sub_resource type="Resource" id="Ingredient_wood1"]
+script = ExtResource("2_ingredient")
+item_id = "wood"
+quantity = 2
+
+[resource]
+script = ExtResource("1_recipe")
+id = "leather_armor"
+display_name = "Leather Armor"
+category = 0
+output_item_id = "leather_armor"
+output_quantity = 1
+ingredients = Array[Ingredient]([SubResource("Ingredient_scrap1"), SubResource("Ingredient_cloth1"), SubResource("Ingredient_fiber1"), SubResource("Ingredient_wood1")])

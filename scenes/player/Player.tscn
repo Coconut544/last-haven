@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="6_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="7_hurtbox"]
 [ext_resource type="Script" path="res://scripts/building/build_system.gd" id="8_build"]
+[ext_resource type="Script" path="res://scripts/player/procedural_character_animator.gd" id="9_animator"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 11.0
@@ -78,6 +79,9 @@ shape = SubResource("CircleShape2D_hitbox")
 
 [node name="BuildSystem" type="Node" parent="."]
 script = ExtResource("8_build")
+
+[node name="CharacterAnimator" type="Node2D" parent="."]
+script = ExtResource("9_animator")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 zoom = Vector2(1.2, 1.2)

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="Recipe" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/crafting/recipe.gd" id="1_recipe"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_scrap1"]
+script = ExtResource("2_ingredient")
+item_id = "scrap"
+quantity = 2
+
+[sub_resource type="Resource" id="Ingredient_stone1"]
+script = ExtResource("2_ingredient")
+item_id = "stone"
+quantity = 1
+
+[resource]
+script = ExtResource("1_recipe")
+id = "repair_kit"
+display_name = "Repair Kit"
+category = 2
+output_item_id = "repair_kit"
+output_quantity = 1
+ingredients = Array[Ingredient]([SubResource("Ingredient_scrap1"), SubResource("Ingredient_stone1")])

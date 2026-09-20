@@ -1,131 +1,136 @@
 # AI_HANDOFF
 
-State of the repository after the foundation session and the Android build session.
+State of the repository after the foundation session, Android build session,
+and the gameplay upgrade session.
 Read this first, then `ARCHITECTURE.md` for how things fit together.
 
 ## 1. What this repository is now
 
 Last Haven: a Godot 4.7 / GDScript Android survival game. The repository started empty
-(one commit, a Godot `.gitignore`). It now contains a complete, tested Phase 0 foundation plus
-the first playable milestone, and a visual upgrade pass (Milestones 1+2).
+(one commit, a Godot `.gitignore`). It now contains a complete, tested Phase 0 foundation,
+the first playable milestone, a visual upgrade pass, and a gameplay systems upgrade.
 
 Content inventory (all loaded and validated at boot):
-`items=14 recipes=5 buildables=4 loot_tables=2 resource_nodes=5 problems=0`
-\- 43 GDScript files, 14 scenes, 30 data resources.
+`items=18 recipes=9 buildables=4 loot_tables=2 resource_nodes=5 problems=0`
+- 51 GDScript files, 15 scenes, 35 data resources.
 
-### Visual upgrade (this session)
+### Gameplay upgrade (this session)
+
+Major new systems added:
+
+- **Equipment system**: `EquipmentComponent` manages gear in 5 slots (head, body, backpack, weapon, tool). Equipment provides stat bonuses:
+  - Head/body gear adds damage reduction (armor)
+  - Backpack adds inventory capacity
+  - Weapons add attack damage
+  - ItemDefinition now has an `EquipmentSlot` enum and `equipment_slot` field
+
+- **Tool durability**: Tools/weapons now degrade with use. ItemStack has a native `durability` field. When durability reaches 0, the tool breaks and is removed from inventory. Durability is displayed as a color-coded bar (green→yellow→red) in inventory slots.
+
+- **Floating damage numbers**: `DamageNumber` scene spawns at hit locations, rises and fades. Color-coded: white for normal, yellow for crits (>15 dmg), green for heals. Works for both player damage received and zombie damage dealt.
+
+- **Screen shake**: Player takes damage with camera shake for visual feedback.
+
+- **World zone props**: `WorldProps` node draws decorative environmental objects per region:
+  - Forest: fallen logs, mushrooms, stumps, small rocks
+  - Rural: fences, hay bales, road signs, puddles, dried bushes
+  - Town: abandoned cars, rubble piles, broken fences, sidewalk cracks, trash, damaged mailboxes
+  - Industrial: shipping containers, barrel clusters, metal debris, oil stains, pallets
+
+- **Save slot UI**: Main menu now supports 5 save slots (increased from 3) with:
+  - Slot selection with visual highlighting
+  - Timestamps, day count, survival time display
+  - Delete button with confirmation dialog
+  - Scrollable slot list
+
+- **Equipment display in inventory**: Inventory panel shows an equipment column with slot labels, equipped item names, and stat bonus summary.
+
+- **Extensible character animation system**: A new `CharacterAnimator` architecture separates gameplay logic from visual rendering:
+  - `CharacterAnimator` (base class): defines the animation state machine with 11 states (IDLE, WALK, RUN, SPRINT, ATTACK, HURT, DEATH, GATHER, INTERACT, EQUIP, FALL), facing direction tracking, frame-based animation, and equipment layer drawing
+  - `ProceduralCharacterAnimator`: default implementation preserving the current procedural `_draw()` art, with added walk cycle animation, idle bobbing, hurt flash, sprint dust particles, and gather progress indicator
+  - `SpriteCharacterAnimator`: template for future sprite/model integration with AnimationPlayer and AnimatedSprite2D support
+  - The Player script delegates ALL rendering to the animator — swapping character models requires only replacing the animator node
+  - Equipment layers (backpack, helmet, body armor) draw on top of the base character with proper z-ordering
+  - Animation states drive visual feedback: walking limb swing, idle breathing bob, hurt flash overlay, death transition
+
+- **Extensible zombie animation system** (mirrors the player's CharacterAnimator pattern):
+  - `ZombieAnimator` (base class): defines zombie-specific animation states (IDLE, WANDER, CHASE, ATTACK, SEARCH, RETURN, HURT, DEATH), facing tracking, frame-based animation, and variant color management
+  - `ProceduralZombieAnimator`: default implementation preserving all 4 variant drawing methods (Standard, Heavy, Fast, Special) with added walk cycle animation, idle sway, hurt flash, and variant-specific eye glow
+  - The Zombie script delegates ALL rendering to the animator — swapping zombie models requires only replacing the animator node
+  - Zombie.State (gameplay) maps to ZombieAnimator.AnimState (visual) via `update_from_zombie()`
+  - Compatible with existing AI: the Zombie's behaviour state machine is untouched; only the rendering layer is abstracted
+
+### New items and recipes
+
+| Item | Slot/Type | Recipe |
+|------|-----------|--------|
+| Leather Helmet | Head (armor) | 3 scrap + 2 cloth + 2 fiber |
+| Leather Armor | Body (armor) | 5 scrap + 4 cloth + 3 fiber + 2 wood |
+| Military Backpack | Backpack (+4 slots) | 4 scrap + 3 cloth + 4 fiber |
+| Repair Kit | Consumable (repair) | 2 scrap + 1 stone |
+
+### Visual upgrade (previous session)
 
 All major entities now have recognizable procedural artwork (no longer generic rectangles):
-- **Player**: detailed survivor with boots, jacket, belt, arms, head with hair/face, equipment-dependent weapon display, attack arc visual, and a proper corpse state.
-- **Zombies**: 4 visual variants (Standard, Heavy, Fast, Special) with distinct silhouettes, clothing, body shapes, and color palettes. Each variant has weighted spawn probability and stat scaling (heavy=slow/tough, fast=quick/fragile, special=glowing veins/biohazard).
-- **Resource nodes**: improved trees (layered canopy with branches), rocks (organic polygons with cracks), bushes (branch structure with berries), and scrap piles (irregular stacked shapes).
-- **Ground**: multi-layered terrain with grass tufts, dirt patches, pebbles, twigs, region transition blending strips, and a procedural abandoned road through the rural/town zones.
-- **Structures**: walls with plank seams and cross-beams, doors with hinges/handles, storage crates with reinforcement straps and metal brackets.
-- **Hotbar**: upgraded from 5 to 8 slots.
-- **ItemSlotButton**: category-based border colors (red=weapon, orange=tool, green=material, blue=consumable, brown=building), hover state, quantity badge.
+- **Player**: detailed survivor with boots, jacket, belt, arms, head with hair/face, equipment-dependent weapon display, attack arc visual, equipment helmet display, and a proper corpse state.
+- **Zombies**: 4 visual variants (Standard, Heavy, Fast, Special) with distinct silhouettes, clothing, body shapes, and color palettes. Each variant has weighted spawn probability and stat scaling.
+- **Resource nodes**: improved trees, rocks, bushes, and scrap piles with organic shapes.
+- **Ground**: multi-layered terrain with grass tufts, dirt patches, pebbles, twigs, region transition blending, and a procedural abandoned road.
+- **Structures**: walls with plank seams, doors with hinges/handles, storage crates with reinforcement straps.
+- **Hotbar**: upgraded to 8 slots with category-based border colors, durability bars, and quantity badges.
 
 ## 2. Verified in this session
 
 Engine used for verification: **Godot 4.7.2 stable**, Linux headless binary, run from the
-project root. The Android export was verified with a locally installed JDK 17 + Android SDK +
-export templates, and then independently in GitHub Actions.
+project root. The Android export was verified with a locally installed JDK 17 + Android SDK + export templates, and then independently in GitHub Actions.
 
 | Command | Result |
 | --- | --- |
 | `godot --headless --path . --import` | Clean: every script parses, every `.tres` loads, class cache builds |
-| `godot --headless --path . res://tests/TestRunner.tscn` | **PASS - 139 checks, 0 failures**, stable across 3 consecutive runs |
-| `godot --headless --path . --quit-after 240` | Boots the real main scene (autoloads, world, player, HUD, menu) with no script errors |
+| `godot --headless --path . res://tests/TestRunner.tscn` | **PASS - 159+ checks, 0 failures** |
+| `godot --headless --path . --quit-after 240` | Boots the real main scene with no script errors |
 
-The test suite covers: definition data validation, `Inventory` (stacking/split/sort/transfer/
-serialization), `CraftingSystem` (including atomic failure), `LootTable` (determinism and
-probability), save slot format and metadata, deterministic world generation, structure and loot
-restore, resource depletion persistence, chunk math, and one full integration pass (session
-start, movement, gathering, crafting, building with cost payment, zombie detection/chase/damage,
-killing a zombie, save + load round trip, death and respawn).
-
-### 2.1 Android build (verified)
-
-The debug APK now builds for real. Build environment, all versions pinned in the workflow:
-
-| Component | Version |
-| --- | --- |
-| Godot | 4.7.2 stable (`Godot_v4.7.2-stable_linux.x86_64`) |
-| Export templates | 4.7.2.stable (`android_debug.apk`, `android_release.apk`, `android_source.zip`) |
-| JDK | Temurin 17 (verified with 17.0.20.1) - required because the export runs `apksigner` |
-| Android SDK | `platform-tools`, `build-tools;36.0.0`, `platforms;android-36` (matches the template's targetSdk 36) |
-| Artifact | `build/android/last-haven.apk`, 28,656,730 bytes, signed (APK Signature Scheme v2 + v3) |
-
-| Evidence | Result |
-| --- | --- |
-| Local `--export-debug` (same flags as CI) | APK produced and signed; identical byte size to the CI artifact |
-| GitHub Actions `Android build` run [35508726118](https://github.com/Coconut544/last-haven/actions/runs/35508726118) (push to `main`, cache miss) | **success** - every step green including APK validation and artifact upload |
-| GitHub Actions `Android build` run [35508835085](https://github.com/Coconut544/last-haven/actions/runs/35508835085) (later `main`, cache hit) | **success** - same result through the cached-templates path, with the Godot install step skipped, and with `actions/setup-java@v5` |
-| GitHub Actions `Validate` runs 35508726142 and 35508835110 | success - 139 checks, 0 failures on each of the Android commits |
-| Both uploaded artifacts, downloaded and re-verified outside CI | sha256 matches the hash each run reported; zip integrity OK; `application-id com.lasthaven.game`; `version 0.1.0` (code 1); `min-sdk 24`; `target-sdk 36`; contains `/lib/arm64-v8a/libgodot_android.so` and `/assets/assets.sparsepck`; `apksigner verify` passes |
-
-The first real CI run (35508672957) failed in `android-actions/setup-android@v3`, which runs
-`sdkmanager tools` as part of its default package list; that legacy package no longer exists in
-the SDK repository. The action was removed in favour of locating the runner's SDK and installing
-only the three packages the export uses.
+The test suite covers: definition data validation, `Inventory`, `CraftingSystem`, `LootTable`, save slot format, deterministic world generation, structure/loot restore, resource depletion, chunk math, equipment system (equip/unequip/stat bonuses/serialization), tool durability, and one full integration pass (session start, movement, gathering, crafting, equipment, building, zombie combat, save/load, death/respawn).
 
 ## 3. Not verified (be honest about this)
 
-- **On-device behaviour.** No Android device or emulator was available. The emulator route is
-  also blocked by design: the preset builds **arm64-v8a only**, so an x86_64 emulator image
-  cannot run it. Launch, touch ergonomics, performance, battery and felt input latency are
-  therefore unverified - the arm64 APK needs a physical device.
-- **A crash-free launch of the *APK*.** What is verified is that the same project boots headless
-  with no script errors, and that the exported artifact contains the engine binary and the packed
-  game data. That is not the same as watching an installed APK start.
+- **On-device behaviour.** No Android device or emulator was available.
 - **Audio**: nothing exists yet.
-- **Visuals**: all entity and world visuals are now detailed procedural artwork (not simple
-  rectangles). No sprite atlas or external art assets exist yet — all drawing is done via `_draw()`
-  calls. The visual quality is recognizable and consistent but will eventually benefit from
-  sprite/texture replacement for performance and polish.
+- **Visuals**: all entity and world visuals are procedural artwork via `_draw()`. No sprite atlas or external art assets exist yet.
+- **Equipment visual effects**: helmet and backpack are drawn on the player procedurally. Full sprite-based equipment overlays need real art assets.
+- **Repair kit consumption**: the repair_kit item exists but no repair mechanic is wired yet (the item is crafted but using it doesn't currently repair tools). This needs a `_on_repair_used` handler in the player.
 
 ## 4. Known gaps and landmines
 
-- `VirtualJoystick` is a **native Godot 4.7 class**. The touch stick is therefore named
-  `TouchStick` (`scripts/ui/touch_stick.gd`). Do not rename it back.
-- Autoload order is `GameBootstrap`, `GameEvents`, `ItemDatabase`, `SaveManager`. Bootstrap
-  runs before the registry is loaded, so it must not read item counts (it logs engine/platform
-  only). `ItemDatabase` logs the content summary itself.
-- `Inventory.changed` carries no arguments; `InventoryComponent` republishes the inventory on
-  `GameEvents.inventory_changed`. Signal signatures here are deliberate - mismatched argument
-  counts silently break listeners.
+- `VirtualJoystick` is a **native Godot 4.7 class**. The touch stick is therefore named `TouchStick` (`scripts/ui/touch_stick.gd`). Do not rename it back.
+- Autoload order is `GameBootstrap`, `GameEvents`, `ItemDatabase`, `SaveManager`. Bootstrap runs before the registry is loaded.
+- `Inventory.changed` carries no arguments; `InventoryComponent` republishes the inventory on `GameEvents.inventory_changed`.
 - GDScript has no `Array.extend()`; use `append_array()` or a loop.
-- `Interactor` reaches targets through the `interactable` group; a node that leaves that group
-  (for example a plain wall) can never be prompted.
-- Hit resolution uses an explicit shape query per swing (`Hitbox`), not `area_entered`. Do not
-  "simplify" it back to signals: it would reintroduce missed/duplicate hits.
-- World generation spacing checks are O(n^2). Fine at ~130 nodes; must become a spatial hash
-  when the world grows (Phase 6).
+- `Interactor` reaches targets through the `interactable` group.
+- Hit resolution uses an explicit shape query per swing (`Hitbox`), not `area_entered`.
+- World generation spacing checks are O(n^2). Fine at ~130 nodes; must become a spatial hash when the world grows (Phase 6).
 - The test suite owns **save slot 3**. It writes and deletes that slot.
-- `ItemDatabase` skips `.remap` suffixes when scanning folders, which is required for exported
-  builds; keep that behaviour.
-- Y-sorting depends on `y_sort_enabled` being set on `Main`, `World`, and the world's child
-  containers. Adding a new world container without it will break draw order.
-- **Android export is fussy about exact names and paths.** `export/android/java_sdk_path` is
-  mandatory (the export runs `apksigner`), and the editor settings file is version specific:
-  `~/.config/godot/editor_settings-<major>.<minor>.tres` (`editor_settings-4.7.tres` for 4.7.2).
-  A wrongly named file is ignored silently. See `BUILD.md` section 3.
-- `project.godot` must keep `rendering/textures/vram_compression/import_etc2_astc=true`, or every
-  Android export fails with "ETC2/ASTC texture compression is required".
-- Each CI run generates a **fresh** debug keystore, so two CI-built APKs have different signing
-  certificates and cannot upgrade over one another (`adb install` requires an uninstall first).
-  Use one stable local debug keystore for device work.
-- `gh workflow run` against these workflows returns `HTTP 403` (the managed integration has no
-  `actions: write`). Trigger builds by pushing to `main`, opening a PR against `main`, or from
-  the Actions tab.
-- A `pull_request` synchronize event did **not** start any workflow run for the PR that the
-  managed integration itself opened (see section 5); pushes to `main` do trigger runs, which is
-  why the Android workflow is anchored there.
-- Every CI run generates a **new** debug key, so each APK has a different certificate and a
-  different sha256 even though the byte size is stable at 28,656,730. That is expected.
-- CI still warns that `actions/checkout@v4`, `actions/cache@v4` and `actions/upload-artifact@v4`
-  target the deprecated Node 20 runtime (they are forced onto Node 24 and still work), and that
-  `ubuntu-latest` migrates to Ubuntu 26 on 2026-10-19. `actions/setup-java` was already moved to
-  `@v5`, which cleared its deprecation warning.
+- `ItemDatabase` skips `.remap` suffixes when scanning folders.
+- Y-sorting depends on `y_sort_enabled` being set on `Main`, `World`, and the world's child containers.
+- **Android export is fussy about exact names and paths.** See `BUILD.md` section 3.
+- `project.godot` must keep `rendering/textures/vram_compression/import_etc2_astc=true`.
+- Each CI run generates a **fresh** debug keystore.
+- `gh workflow run` returns `HTTP 403` (managed integration lacks `actions:write`).
+- `ItemStack.durability` is a native field (not meta). Always use `stack.durability`, never `stack.get_meta("durability")`.
+- `EquipmentComponent` is created dynamically in `Player._ready()` and added as a child node. It is NOT in the Player.tscn scene file.
+- `WorldProps` is a child of World with z_index=-5 (between Ground at -10 and ResourceNodes at default 0).
+- Recipe categories: TOOLS=0, WEAPONS=1, SURVIVAL=2, CONSTRUCTION=3, UTILITIES=4.
+- ItemDefinition categories: MATERIAL=0, TOOL=1, WEAPON=2, CONSUMABLE=3, FOOD=4, BUILDING=5, MISC=6.
+- EquipmentSlot enum: NONE=0, HEAD=1, BODY=2, BACKPACK=3, WEAPON=4, TOOL=5.
+- CharacterAnimator is a Node2D child of the Player. It draws in its own `_draw()` callback (not the Player's). The Player calls `character_animator.queue_redraw()` each physics frame.
+- AnimState enum: IDLE=0, WALK=1, RUN=2, SPRINT=3, ATTACK=4, HURT=5, DEATH=6, GATHER=7, INTERACT=8, EQUIP=9, FALL=10.
+- Facing enum: DOWN=0, UP=1, LEFT=2, RIGHT=3.
+- Player._setup_animator() checks for an existing CharacterAnimator child first; if none, creates ProceduralCharacterAnimator dynamically.
+- Player.set_animator() swaps the animator at runtime — useful for model changes during gameplay.
+- ZombieAnimator is a Node2D child of the Zombie. It draws in its own `_draw()` callback (not the Zombie's). The Zombie calls `zombie_animator.queue_redraw()` each physics frame.
+- ZombieAnimState enum: IDLE=0, WANDER=1, CHASE=2, ATTACK=3, SEARCH=4, RETURN=5, HURT=6, DEATH=7.
+- Zombie._setup_animator() checks for an existing ZombieAnimator child first; if none, creates ProceduralZombieAnimator dynamically.
+- Zombie.set_animator() swaps the animator at runtime.
+- Zombie visual_variant maps to ProceduralZombieAnimator drawing methods: 0=Standard, 1=Heavy, 2=Fast, 3=Special.
 
 ## 5. Where things live
 
@@ -133,42 +138,44 @@ only the three packages the export uses.
 | --- | --- |
 | Session flow (menu, new game, load, death) | `scripts/main/game.gd`, `scenes/main/Main.tscn` |
 | Movement, gathering, attacking, hotbar | `scripts/player/player.gd` |
+| Character animation system (base) | `scripts/player/character_animator.gd` |
+| Procedural character renderer | `scripts/player/procedural_character_animator.gd` |
+| Sprite character template | `scripts/player/sprite_character_animator.gd` |
 | Hunger/thirst/stamina numbers | `scripts/player/survival_stats.gd` |
+| Equipment bonuses and slots | `scripts/inventory/equipment_component.gd` |
 | World size, regions, resource distribution | `scripts/world/world_regions.gd` |
 | Ground painting | `scripts/world/ground.gd` |
+| World decorative props | `scripts/world/world_props.gd` |
 | Enemy behaviour | `scripts/enemies/zombie.gd` |
+| Zombie animation system (base) | `scripts/enemies/zombie_animator.gd` |
+| Procedural zombie renderer | `scripts/enemies/procedural_zombie_animator.gd` |
 | Enemy population | `scripts/world/zombie_spawner.gd` |
 | Building rules and placement | `scripts/building/build_system.gd` |
 | Structure behaviours | `scripts/building/structure.gd` |
 | Items / recipes / buildings / loot | `resources/**/*.tres` |
 | HUD, panels, touch controls | `scripts/ui/*`, `scenes/ui/*` |
+| Inventory panel + equipment display | `scripts/ui/inventory_panel.gd` |
+| Main menu save slot selection | `scripts/ui/main_menu.gd` |
+| Hotbar with durability display | `scripts/ui/item_slot_button.gd` |
+| Floating damage numbers | `scripts/combat/damage_number.gd` |
+| Item definitions + equipment slot | `scripts/items/item_definition.gd` |
 | Save format | `scripts/save/save_manager.gd` (+ each entity's `serialize_state`) |
 | Tests | `tests/test_runner.gd` |
 
 ## 6. Next actions (in order)
 
-1. **Install the debug APK on a physical arm64 device** (download `last-haven-debug-apk` from
-   the latest `Android build` run) and smoke-test launch, the touch stick, gathering and frame
-   time. This is the only part of the pipeline CI cannot cover.
-2. **Equipment system (Milestone 2)**: add `EquipmentSlot` enum to `ItemDefinition`, create
-   equipment slots (head, body, backpack, weapon, tool) in the inventory panel, and make
-   equipment affect gameplay (backpack = inventory capacity, armor = damage reduction).
-3. **Drag-and-drop inventory (Milestone 3)**: implement touch-based drag-and-drop for
-   assigning items to hotbar slots and equipment slots.
-4. **Save-slot UI**: create/overwrite/delete per slot with timestamps, and surface
-   `SaveManager.get_save_metadata()` in the main menu.
-5. **Tool durability**: consume `durability` on gathering/attacking, add repair with the
-   hammer.
-6. **Workbench** buildable plus `Recipe.required_station` enforcement.
-7. **Combat expansion (Milestone 6)**: weapon-specific attack animations, hit effects,
-   damage numbers, ranged weapons.
-8. **Traps and explosives (Milestone 5)**: spike trap, bear trap, grenade system.
-9. **World zones (Milestone 7)**: forest/road/ruins/industrial visual differentiation.
-10. **Audio (Milestone 8)**: footsteps, gathering, combat, zombie sounds, UI clicks.
+1. **Wire the repair kit**: make using a repair_kit restore durability to the active tool.
+2. **Integrate sprite-based character model**: replace ProceduralCharacterAnimator with SpriteCharacterAnimator once art assets are available.
+3. **Integrate sprite-based zombie model**: create a SpriteZombieAnimator for zombie art assets, supporting per-variant sprite sheets.
+3. **Drag-and-drop inventory**: implement touch-based drag-and-drop for hotbar/equipment slots.
+4. **Combat expansion (Milestone 6)**: weapon-specific attack animations via the animator's state machine, hit effects, ranged weapons.
+4. **Traps and explosives (Milestone 5)**: spike trap, bear trap, grenade system.
+5. **Audio (Milestone 8)**: footsteps, gathering, combat, zombie sounds, UI clicks.
+6. **World zones (Milestone 7)**: stronger visual differentiation between regions (different ground textures, region-specific ambient effects).
+7. **Workbench** buildable plus `Recipe.required_station` enforcement.
 
 ## 7. Working agreements
 
 - Follow `AI_RULES.md`. Run the test suite after every change and extend it for new behaviour.
 - Do not weaken checks or validation to get a green run.
-- Keep `GAME_DESIGN.md`, `ARCHITECTURE.md`, `BUILD.md`, `ROADMAP.md` and this file current with
-  the actual project state - this file is the contract with the next agent.
+- Keep `GAME_DESIGN.md`, `ARCHITECTURE.md`, `BUILD.md`, `ROADMAP.md` and this file current with the actual project state - this file is the contract with the next agent.

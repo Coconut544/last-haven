@@ -9,6 +9,7 @@ extends Resource
 enum Category { MATERIAL, TOOL, WEAPON, CONSUMABLE, FOOD, BUILDING, MISC }
 enum ToolType { NONE, AXE, PICKAXE, KNIFE, HAMMER }
 enum Rarity { COMMON, UNCOMMON, RARE, EPIC, EXCEPTIONAL }
+enum EquipmentSlot { NONE, HEAD, BODY, BACKPACK, WEAPON, TOOL }
 
 @export var id: String = ""
 @export var display_name: String = ""
@@ -44,6 +45,10 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, EXCEPTIONAL }
 @export_range(0.0, 100.0, 0.5) var food_restore: float = 0.0
 @export_range(0.0, 100.0, 0.5) var water_restore: float = 0.0
 
+@export_group("Equipment")
+## Which equipment slot this item goes into. NONE means it cannot be equipped.
+@export var equipment_slot: EquipmentSlot = EquipmentSlot.NONE
+
 
 func is_tool() -> bool:
 	return tool_type != ToolType.NONE
@@ -55,6 +60,10 @@ func is_stackable() -> bool:
 
 func is_consumable() -> bool:
 	return health_restore > 0.0 or food_restore > 0.0 or water_restore > 0.0
+
+
+func is_equipment() -> bool:
+	return equipment_slot != EquipmentSlot.NONE
 
 
 func body_slot_name() -> String:
