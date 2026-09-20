@@ -48,23 +48,32 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JDK_VERSION }}
 
-      - name: Set up Android command line tools
-        uses: android-actions/setup-android@v3
+      - name: Locate the Android SDK shipped with the runner
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK_ROOT" ]; then
+            echo "::error::No Android SDK found at ANDROID_SDK_ROOT/ANDROID_HOME or $SDK_ROOT."
+            exit 1
+          fi
+          # Pin the SDK root for every later step.
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "Android SDK: $SDK_ROOT"
 
       - name: Install the exact Android SDK packages the export needs
         run: |
           set -euo pipefail
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
-          if [ -z "$SDK_ROOT" ] || [ ! -d "$SDK_ROOT" ]; then
-            echo "::error::setup-android provided no SDK path (ANDROID_SDK_ROOT/ANDROID_HOME are unset)."
-            exit 1
-          fi
-          # Pin the SDK root for every later step instead of relying on the action.
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          SDK_ROOT="${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is not set}"
 
+          # The legacy `tools` package was removed from the SDK repository, which
+          # broke setup-android's default package list; only install what is used.
           SDKMANAGER="$(command -v sdkmanager || true)"
-          [ -n "$SDKMANAGER" ] || SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ -z "$SDKMANAGER" ]; then
+            # cmdline-tools/<version>/bin/sdkmanager
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -name sdkmanager 2>/dev/null | sort | tail -1)"
+          fi
           test -x "$SDKMANAGER"
+          echo "sdkmanager: $SDKMANAGER"
 
           # `yes` is expected to die from SIGPIPE once sdkmanager exits, which
           # pipefail would report as a failure; the assertions below are the real check.
@@ -166,7 +175,10 @@ jobs:
           set -euo pipefail
           : "${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is not set}"
           APKANALYZER="$(command -v apkanalyzer || true)"
-          [ -n "$APKANALYZER" ] || APKANALYZER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/apkanalyzer"
+          if [ -z "$APKANALYZER" ]; then
+            # cmdline-tools/<version>/bin/apkanalyzer
+            APKANALYZER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -maxdepth 3 -name apkanalyzer 2>/dev/null | sort | tail -1)"
+          fi
           APKSIGNER="$ANDROID_SDK_ROOT/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
           REPORT="$(dirname "$APK_PATH")/apk-validation.txt"
           test -x "$APKANALYZER"
