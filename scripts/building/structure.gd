@@ -186,16 +186,26 @@ func apply_state(state: Dictionary) -> void:
 		inventory.load_from_dict(state.get("inventory", {}))
 
 
-# --- placeholder visuals ------------------------------------------------------
+# --- visuals ---------------------------------------------------------------
 
 func _draw_floor(rect: Rect2) -> void:
-	draw_rect(rect, definition.primary_color, true)
-	draw_rect(rect, definition.accent_color, false, 1.0)
-	var plank := maxf(4.0, rect.size.y / 4.0)
-	var y := rect.position.y + plank
+	var wood := definition.primary_color
+	var grain := definition.accent_color
+	# Base floor.
+	draw_rect(rect, wood, true)
+	# Plank lines.
+	var plank_h := maxf(5.0, rect.size.y / 4.0)
+	var y := rect.position.y + plank_h
 	while y < rect.end.y:
-		draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y), definition.accent_color, 1.0)
-		y += plank
+		draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y), grain.darkened(0.1), 1.0)
+		y += plank_h
+	# Nail dots.
+	for i in 3:
+		var nx := rect.position.x + rect.size.x * (0.2 + i * 0.3)
+		draw_circle(Vector2(nx, rect.position.y + 3), 1.0, grain.darkened(0.2))
+		draw_circle(Vector2(nx, rect.end.y - 3), 1.0, grain.darkened(0.2))
+	# Border.
+	draw_rect(rect, grain.darkened(0.05), false, 1.5)
 
 
 func _draw() -> void:
@@ -203,22 +213,108 @@ func _draw() -> void:
 		return
 	var half := definition.collision_size * 0.5
 	var rect := Rect2(-half, definition.collision_size)
+	var wood := definition.primary_color
+	var grain := definition.accent_color
+
 	if definition.behaviour == BuildableDefinition.Behaviour.DECORATION:
 		_draw_floor(rect)
 		return
-	var body_color := definition.primary_color
-	if is_door() and door_open:
-		body_color = definition.primary_color.darkened(0.35)
-	draw_rect(rect, body_color, true)
-	draw_rect(rect, definition.accent_color, false, 2.0)
 
-	# Health bar when damaged, so raids are readable at a glance.
+	if is_door():
+		_draw_door(rect, wood, grain)
+		return
+
+	if is_storage():
+		_draw_storage(rect, wood, grain)
+		return
+
+	# --- wall / fence / barricade ---
+	var body_color := wood
+	var dark := wood.darkened(0.12)
+	# Main body.
+	draw_rect(rect, body_color, true)
+	# Vertical plank seams.
+	var plank_w := maxf(6.0, rect.size.x / 4.0)
+	var x := rect.position.x + plank_w
+	while x < rect.end.x:
+		draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y), grain.darkened(0.08), 1.0)
+		x += plank_w
+	# Horizontal cross-beam.
+	draw_line(Vector2(rect.position.x, rect.position.y + rect.size.y * 0.35),
+		Vector2(rect.end.x, rect.position.y + rect.size.y * 0.35), grain, 2.5)
+	# Nails.
+	for i in 4:
+		var nx := rect.position.x + rect.size.x * (0.15 + i * 0.23)
+		draw_circle(Vector2(nx, rect.position.y + rect.size.y * 0.35), 1.2, grain.darkened(0.2))
+	# Border.
+	draw_rect(rect, grain.darkened(0.05), false, 2.0)
+
+	# Health bar when damaged.
 	if health != null and not health.is_full():
 		var ratio := health.get_ratio()
 		var bar_width := maxf(definition.collision_size.x, 24.0)
-		draw_rect(Rect2(-bar_width * 0.5, -half.y - 10.0, bar_width, 4.0), Color(0, 0, 0, 0.6), true)
-		draw_rect(Rect2(-bar_width * 0.5, -half.y - 10.0, bar_width * ratio, 4.0),
+		var half_y := definition.collision_size.y * 0.5
+		draw_rect(Rect2(-bar_width * 0.5, -half_y - 10.0, bar_width, 4.0), Color(0, 0, 0, 0.6), true)
+		draw_rect(Rect2(-bar_width * 0.5, -half_y - 10.0, bar_width * ratio, 4.0),
 				Color(0.85, 0.35, 0.25), true)
 
-	if is_storage():
-		draw_line(Vector2(-half.x, 0), Vector2(half.x, 0), definition.accent_color, 2.0)
+
+func _draw_door(rect: Rect2, wood: Color, grain: Color) -> void:
+	if door_open:
+		# Open door — just a dark opening.
+		draw_rect(rect, wood.darkened(0.5), true)
+		draw_rect(rect, grain.darkened(0.2), false, 2.0)
+		return
+	# Closed door.
+	draw_rect(rect, wood, true)
+	# Planks.
+	var plank_w := maxf(6.0, rect.size.x / 3.0)
+	var x := rect.position.x + plank_w
+	while x < rect.end.x:
+		draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y), grain.darkened(0.08), 1.0)
+		x += plank_w
+	# Cross brace.
+	draw_line(Vector2(rect.position.x, rect.position.y), Vector2(rect.end.x, rect.end.y), grain, 1.5)
+	draw_line(Vector2(rect.end.x, rect.position.y), Vector2(rect.position.x, rect.end.y), grain, 1.5)
+	# Hinges.
+	var hinge_y1 := rect.position.y + 6.0
+	var hinge_y2 := rect.end.y - 6.0
+	draw_circle(Vector2(rect.position.x + 3, hinge_y1), 2.0, Color(0.35, 0.32, 0.30))
+	draw_circle(Vector2(rect.position.x + 3, hinge_y2), 2.0, Color(0.35, 0.32, 0.30))
+	# Handle.
+	draw_circle(Vector2(rect.end.x - 5, rect.position.y + rect.size.y * 0.5), 2.5, Color(0.5, 0.48, 0.42))
+	# Border.
+	draw_rect(rect, grain.darkened(0.05), false, 2.0)
+
+
+func _draw_storage(rect: Rect2, wood: Color, grain: Color) -> void:
+	# Crate body.
+	draw_rect(rect, wood.darkened(0.05), true)
+	# Reinforcement straps.
+	var strap_color := Color(0.30, 0.28, 0.25)
+	draw_line(Vector2(rect.position.x + 2, rect.position.y), Vector2(rect.position.x + 2, rect.end.y), strap_color, 2.0)
+	draw_line(Vector2(rect.end.x - 2, rect.position.y), Vector2(rect.end.x - 2, rect.end.y), strap_color, 2.0)
+	# Horizontal strap.
+	draw_line(Vector2(rect.position.x, rect.position.y + rect.size.y * 0.45),
+		Vector2(rect.end.x, rect.position.y + rect.size.y * 0.45), strap_color, 2.0)
+	# Metal corner brackets.
+	var bracket_color := Color(0.45, 0.42, 0.38)
+	for corner in [Vector2(rect.position.x, rect.position.y), Vector2(rect.end.x - 6, rect.position.y),
+			Vector2(rect.position.x, rect.end.y - 6), Vector2(rect.end.x - 6, rect.end.y - 6)]:
+		draw_rect(Rect2(corner, Vector2(6, 6)), bracket_color, true)
+	# Lid line.
+	draw_line(Vector2(rect.position.x, rect.position.y + 4), Vector2(rect.end.x, rect.position.y + 4), grain.lightened(0.1), 1.5)
+	# Handle on top.
+	var cx := rect.position.x + rect.size.x * 0.5
+	draw_line(Vector2(cx - 5, rect.position.y - 3), Vector2(cx + 5, rect.position.y - 3), strap_color, 2.0)
+	# Border.
+	draw_rect(rect, grain.darkened(0.05), false, 2.0)
+
+	# Health bar when damaged.
+	if health != null and not health.is_full():
+		var ratio := health.get_ratio()
+		var bar_width := maxf(definition.collision_size.x, 24.0)
+		var half_y := definition.collision_size.y * 0.5
+		draw_rect(Rect2(-bar_width * 0.5, -half_y - 10.0, bar_width, 4.0), Color(0, 0, 0, 0.6), true)
+		draw_rect(Rect2(-bar_width * 0.5, -half_y - 10.0, bar_width * ratio, 4.0),
+				Color(0.85, 0.35, 0.25), true)

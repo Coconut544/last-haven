@@ -7,11 +7,22 @@ Read this first, then `ARCHITECTURE.md` for how things fit together.
 
 Last Haven: a Godot 4.7 / GDScript Android survival game. The repository started empty
 (one commit, a Godot `.gitignore`). It now contains a complete, tested Phase 0 foundation plus
-the first playable milestone.
+the first playable milestone, and a visual upgrade pass (Milestones 1+2).
 
 Content inventory (all loaded and validated at boot):
 `items=14 recipes=5 buildables=4 loot_tables=2 resource_nodes=5 problems=0`
 \- 43 GDScript files, 14 scenes, 30 data resources.
+
+### Visual upgrade (this session)
+
+All major entities now have recognizable procedural artwork (no longer generic rectangles):
+- **Player**: detailed survivor with boots, jacket, belt, arms, head with hair/face, equipment-dependent weapon display, attack arc visual, and a proper corpse state.
+- **Zombies**: 4 visual variants (Standard, Heavy, Fast, Special) with distinct silhouettes, clothing, body shapes, and color palettes. Each variant has weighted spawn probability and stat scaling (heavy=slow/tough, fast=quick/fragile, special=glowing veins/biohazard).
+- **Resource nodes**: improved trees (layered canopy with branches), rocks (organic polygons with cracks), bushes (branch structure with berries), and scrap piles (irregular stacked shapes).
+- **Ground**: multi-layered terrain with grass tufts, dirt patches, pebbles, twigs, region transition blending strips, and a procedural abandoned road through the rural/town zones.
+- **Structures**: walls with plank seams and cross-beams, doors with hinges/handles, storage crates with reinforcement straps and metal brackets.
+- **Hotbar**: upgraded from 5 to 8 slots.
+- **ItemSlotButton**: category-based border colors (red=weapon, orange=tool, green=material, blue=consumable, brown=building), hover state, quantity badge.
 
 ## 2. Verified in this session
 
@@ -67,8 +78,10 @@ only the three packages the export uses.
   with no script errors, and that the exported artifact contains the engine binary and the packed
   game data. That is not the same as watching an installed APK start.
 - **Audio**: nothing exists yet.
-- **Visuals**: everything is procedural placeholder geometry. No sprite, no atlas, no font
-  asset (the HUD uses Godot's fallback font).
+- **Visuals**: all entity and world visuals are now detailed procedural artwork (not simple
+  rectangles). No sprite atlas or external art assets exist yet — all drawing is done via `_draw()`
+  calls. The visual quality is recognizable and consistent but will eventually benefit from
+  sprite/texture replacement for performance and polish.
 
 ## 4. Known gaps and landmines
 
@@ -137,17 +150,21 @@ only the three packages the export uses.
 1. **Install the debug APK on a physical arm64 device** (download `last-haven-debug-apk` from
    the latest `Android build` run) and smoke-test launch, the touch stick, gathering and frame
    time. This is the only part of the pipeline CI cannot cover.
-2. **Save-slot UI**: create/overwrite/delete per slot with timestamps, and surface
-   `SaveManager.get_save_metadata()` in the main menu (currently only the newest slot is
-   offered).
-3. **Tool durability**: consume `durability` on gathering/attacking, add repair with the
-   hammer. The field already travels through `ItemStack` and the save file.
-4. **Workbench** buildable plus `Recipe.required_station` enforcement (blocked crafts should
-   show "needs workbench" in the crafting panel).
-5. **Zombie variants** (runner, brute) and a night horde event; the spawner and detection code
-   already expose the hooks.
-6. **Art pass decision**: replace procedural drawing with sprites/atlases when the systems stop
-   changing, and record the asset licence here before committing anything.
+2. **Equipment system (Milestone 2)**: add `EquipmentSlot` enum to `ItemDefinition`, create
+   equipment slots (head, body, backpack, weapon, tool) in the inventory panel, and make
+   equipment affect gameplay (backpack = inventory capacity, armor = damage reduction).
+3. **Drag-and-drop inventory (Milestone 3)**: implement touch-based drag-and-drop for
+   assigning items to hotbar slots and equipment slots.
+4. **Save-slot UI**: create/overwrite/delete per slot with timestamps, and surface
+   `SaveManager.get_save_metadata()` in the main menu.
+5. **Tool durability**: consume `durability` on gathering/attacking, add repair with the
+   hammer.
+6. **Workbench** buildable plus `Recipe.required_station` enforcement.
+7. **Combat expansion (Milestone 6)**: weapon-specific attack animations, hit effects,
+   damage numbers, ranged weapons.
+8. **Traps and explosives (Milestone 5)**: spike trap, bear trap, grenade system.
+9. **World zones (Milestone 7)**: forest/road/ruins/industrial visual differentiation.
+10. **Audio (Milestone 8)**: footsteps, gathering, combat, zombie sounds, UI clicks.
 
 ## 7. Working agreements
 

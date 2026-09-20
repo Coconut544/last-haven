@@ -518,40 +518,93 @@ func _color_for(slot: String, fallback: Color) -> Color:
 	return definition.icon_color if definition != null else fallback
 
 
-# --- placeholder visuals ------------------------------------------------------
+# --- visuals ---------------------------------------------------------------
+
+## Skin / clothing colours derived from equipment.
+var _skin := Color(0.78, 0.62, 0.5)
+var _shirt := Color(0.33, 0.39, 0.34)
+var _pants := Color(0.22, 0.24, 0.29)
+var _hair := Color(0.16, 0.13, 0.11)
+var _boots := Color(0.22, 0.17, 0.13)
+var _belt := Color(0.28, 0.22, 0.16)
+
 
 func _draw() -> void:
 	if is_dead:
 		_draw_corpse()
 		return
-	var skin := Color(0.78, 0.62, 0.5)
-	var shirt := _color_for("shirt", Color(0.33, 0.39, 0.34))
-	var pants := _color_for("pants", Color(0.22, 0.24, 0.29))
-	var hair := _color_for("hair", Color(0.16, 0.13, 0.11))
+	_refresh_colors()
+	var dir := facing.normalized()
+	var facing_angle := dir.angle()
 
-	draw_circle(Vector2(0, 10), 13.0, Color(0, 0, 0, 0.22))
+	# Shadow.
+	_draw_circle(Vector2(0, 14), 15.0, Color(0, 0, 0, 0.20))
 
-	# Legs + boots.
-	draw_rect(Rect2(-8, 1, 6, 11), pants, true)
-	draw_rect(Rect2(2, 1, 6, 11), pants, true)
-	draw_rect(Rect2(-8, 10, 6, 3), pants.darkened(0.4), true)
-	draw_rect(Rect2(2, 10, 6, 3), pants.darkened(0.4), true)
+	# --- legs & boots (closer to camera) -----------------------------------
+	var leg_w := 5.0
+	var leg_h := 10.0
+	var leg_y := 2.0
+	var boot_h := 3.5
+	# Left leg.
+	_draw_rounded_rect(Rect2(-8.5, leg_y, leg_w, leg_h), _pants, 1.5)
+	_draw_rounded_rect(Rect2(-8.5, leg_y + leg_h, leg_w, boot_h), _boots, 1.5)
+	# Right leg.
+	_draw_rounded_rect(Rect2(3.5, leg_y, leg_w, leg_h), _pants, 1.5)
+	_draw_rounded_rect(Rect2(3.5, leg_y + leg_h, leg_w, boot_h), _boots, 1.5)
+	# Belt.
+	draw_rect(Rect2(-10, -1, 20, 3.0), _belt, true)
+	draw_circle(Vector2(0, 0.5), 2.0, Color(0.6, 0.55, 0.4))
 
-	# Torso + arms.
-	draw_rect(Rect2(-10, -9, 20, 12), shirt, true)
-	draw_rect(Rect2(-13, -7, 4, 10), shirt.darkened(0.12), true)
-	draw_rect(Rect2(9, -7, 4, 10), shirt.darkened(0.12), true)
+	# --- torso (jacket) -----------------------------------------------------
+	var jacket := _shirt
+	_draw_rounded_rect(Rect2(-11, -11, 22, 13), jacket, 2.0)
+	# Collar.
+	draw_line(Vector2(-5, -11), Vector2(5, -11), jacket.lightened(0.15), 1.5)
+	# Zipper / seam line.
+	draw_line(Vector2(0, -11), Vector2(0, 2), jacket.darkened(0.25), 1.0)
+	# Pocket hints.
+	draw_rect(Rect2(-9, -3, 7, 5), jacket.darkened(0.08), true)
+	draw_rect(Rect2(2, -3, 7, 5), jacket.darkened(0.08), true)
 
-	# Backpack, when one is equipped.
-	var backpack := str(equipment.get("backpack", ""))
-	if not backpack.is_empty():
-		draw_rect(Rect2(-7, -11, 14, 8), _color_for("backpack", Color(0.4, 0.33, 0.22)), true)
+	# --- arms (behind weapon hand) ------------------------------------------
+	var arm_w := 4.0
+	var arm_h := 9.0
+	var left_arm_x := -14.0
+	var right_arm_x := 10.0
+	var arm_y := -8.0
+	# Left arm.
+	_draw_rounded_rect(Rect2(left_arm_x, arm_y, arm_w, arm_h), _shirt.darkened(0.10), 1.5)
+	_draw_circle(Vector2(left_arm_x + arm_w * 0.5, arm_y + arm_h + 1), 2.5, _skin)
+	# Right arm (holds weapon).
+	_draw_rounded_rect(Rect2(right_arm_x, arm_y, arm_w, arm_h), _shirt.darkened(0.10), 1.5)
+	_draw_circle(Vector2(right_arm_x + arm_w * 0.5, arm_y + arm_h + 1), 2.5, _skin)
 
-	# Head, hair and face direction marker.
-	draw_circle(Vector2(0, -15), 7.5, skin)
-	draw_rect(Rect2(-7.5, -22, 15, 5), hair, true)
-	draw_circle(Vector2(0, -15) + facing.normalized() * 4.0, 1.6, Color(0.12, 0.1, 0.1))
+	# --- backpack (if equipped, drawn behind torso) --------------------------
+	var backpack_id := str(equipment.get("backpack", ""))
+	if not backpack_id.is_empty():
+		var bp_color := _color_for("backpack", Color(0.40, 0.33, 0.22))
+		_draw_rounded_rect(Rect2(-8, -14, 16, 10), bp_color.darkened(0.15), 2.0)
+		_draw_rounded_rect(Rect2(-6, -12, 12, 6), bp_color, 2.0)
+		# Buckle.
+		draw_circle(Vector2(0, -12), 1.5, Color(0.55, 0.50, 0.40))
 
+	# --- head ----------------------------------------------------------------
+	var head_pos := Vector2(0, -16)
+	_draw_circle(head_pos, 8.0, _skin)
+	# Hair (top of head).
+	_draw_rounded_rect(Rect2(-8, -24.5, 16, 6.5), _hair, 2.5)
+	# Side hair.
+	_draw_rounded_rect(Rect2(-8, -21, 3, 5), _hair.darkened(0.08), 1.0)
+	_draw_rounded_rect(Rect2(5, -21, 3, 5), _hair.darkened(0.08), 1.0)
+	# Face direction dot.
+	var face_pos := head_pos + dir * 5.0
+	draw_circle(face_pos, 1.6, Color(0.12, 0.10, 0.10))
+	# Eyes hint (two tiny dots offset from face direction).
+	var perp := Vector2(-dir.y, dir.x)
+	_draw_circle(face_pos + perp * 2.2 - dir * 1.5, 1.1, Color(0.10, 0.08, 0.08))
+	_draw_circle(face_pos - perp * 2.2 - dir * 1.5, 1.1, Color(0.10, 0.08, 0.08))
+
+	# --- held item -----------------------------------------------------------
 	_draw_held_item()
 	_draw_attack_flash()
 
@@ -561,31 +614,94 @@ func _draw_held_item() -> void:
 	if item == null:
 		return
 	var direction := facing.normalized()
-	var origin := direction * 12.0
+	var origin := direction * 13.0 + Vector2(10, -5) # right hand area
 	if item.category == ItemDefinition.Category.WEAPON or item.tool_type != ItemDefinition.ToolType.NONE:
-		var handle_end := origin + direction * 10.0
-		draw_line(origin, handle_end, Color(0.35, 0.26, 0.16), 3.0)
-		draw_circle(handle_end, 3.5, item.icon_color)
+		# Handle.
+		var handle_end := origin + direction * 6.0
+		draw_line(origin, handle_end, Color(0.35, 0.26, 0.16), 2.5)
+		# Head / blade.
+		if item.tool_type == ItemDefinition.ToolType.AXE:
+			# Axe head.
+			draw_circle(handle_end + direction * 3.0, 4.5, Color(0.5, 0.5, 0.52))
+			draw_line(handle_end, handle_end + direction * 3.0, Color(0.45, 0.45, 0.48), 2.0)
+		elif item.tool_type == ItemDefinition.ToolType.KNIFE:
+			# Knife blade.
+			draw_line(handle_end, handle_end + direction * 8.0, Color(0.65, 0.65, 0.7), 2.0)
+		elif item.tool_type == ItemDefinition.ToolType.PICKAXE:
+			# Pickaxe head.
+			var perp := Vector2(-direction.y, direction.x)
+			draw_line(handle_end + perp * 5, handle_end - perp * 5, Color(0.5, 0.5, 0.52), 3.0)
+		elif item.tool_type == ItemDefinition.ToolType.HAMMER:
+			# Hammer head.
+			draw_rect(Rect2(handle_end.x - 4, handle_end.y - 3, 8, 6), Color(0.48, 0.48, 0.5), true)
+		else:
+			# Generic weapon.
+			draw_circle(handle_end, 4.0, item.icon_color)
 	else:
-		draw_circle(origin, 4.0, item.icon_color)
+		# Consumable or misc held item.
+		draw_circle(origin, 4.5, item.icon_color)
 
 
 func _draw_attack_flash() -> void:
 	if _attack_flash <= 0.0:
 		return
 	var direction := facing.normalized()
-	var start := direction.angle() - 0.7
-	var end := direction.angle() + 0.7
+	var start_angle := direction.angle() - 0.8
+	var end_angle := direction.angle() + 0.8
 	var points := PackedVector2Array()
-	for step in 8:
-		var angle := lerpf(start, end, float(step) / 7.0)
-		points.append(Vector2.RIGHT.rotated(angle) * (attack_hitbox.reach + 6.0))
-	draw_polyline(points, Color(1.0, 0.95, 0.8, clampf(_attack_flash * 4.0, 0.0, 0.9)), 3.0)
+	for step in 10:
+		var a := lerpf(start_angle, end_angle, float(step) / 9.0)
+		points.append(Vector2.RIGHT.rotated(a) * (attack_hitbox.reach + 4.0))
+	var alpha := clampf(_attack_flash * 5.0, 0.0, 0.85)
+	draw_polyline(points, Color(1.0, 0.95, 0.8, alpha), 2.5)
+	# Slash arc fill.
+	var arc_points := PackedVector2Array([Vector2.ZERO])
+	for step in 12:
+		var a := lerpf(start_angle, end_angle, float(step) / 11.0)
+		arc_points.append(Vector2.RIGHT.rotated(a) * (attack_hitbox.reach - 4.0))
+	draw_colored_polygon(arc_points, Color(1.0, 0.92, 0.75, alpha * 0.25))
 
 
 func _draw_corpse() -> void:
-	draw_circle(Vector2.ZERO, 12.0, Color(0, 0, 0, 0.3))
-	draw_rect(Rect2(-10, -6, 20, 12), Color(0.3, 0.28, 0.26), true)
-	draw_circle(Vector2(0, -10), 7.0, Color(0.66, 0.52, 0.42))
-	draw_line(Vector2(-12, -4), Vector2(-16, 6), Color(0.55, 0.45, 0.35), 3.0)
-	draw_line(Vector2(12, -4), Vector2(16, 6), Color(0.55, 0.45, 0.35), 3.0)
+	var dir := facing.normalized()
+	var corpse_color := Color(0.28, 0.26, 0.24)
+	var skin_color := Color(0.60, 0.48, 0.38)
+	# Shadow.
+	_draw_circle(Vector2(2, 4), 14.0, Color(0, 0, 0, 0.25))
+	# Body (lying on side).
+	_draw_rounded_rect(Rect2(-10, -5, 20, 10), corpse_color, 2.0)
+	# Head.
+	_draw_circle(Vector2(-8, -6), 6.5, skin_color)
+	# Arms sprawled.
+	draw_line(Vector2(-10, -2), Vector2(-18, -8), Color(0.55, 0.45, 0.38), 2.5)
+	draw_line(Vector2(8, -1), Vector2(16, 8), Color(0.55, 0.45, 0.38), 2.5)
+	# Legs.
+	draw_line(Vector2(-3, 5), Vector2(-8, 14), Color(0.20, 0.19, 0.18), 3.0)
+	draw_line(Vector2(3, 5), Vector2(8, 14), Color(0.20, 0.19, 0.18), 3.0)
+	# Blood pool.
+	_draw_circle(Vector2(0, 8), 8.0, Color(0.35, 0.08, 0.06, 0.45))
+
+
+# --- tiny drawing helpers --------------------------------------------------
+
+func _refresh_colors() -> void:
+	_skin = Color(0.78, 0.62, 0.5)
+	_shirt = _color_for("shirt", Color(0.33, 0.39, 0.34))
+	_pants = _color_for("pants", Color(0.22, 0.24, 0.29))
+	_hair = _color_for("hair", Color(0.16, 0.13, 0.11))
+	_boots = _color_for("boots", Color(0.22, 0.17, 0.13))
+	_belt = Color(0.28, 0.22, 0.16)
+
+
+func _draw_circle(center: Vector2, radius: float, color: Color) -> void:
+	draw_circle(center, radius, color)
+
+
+func _draw_rounded_rect(rect: Rect2, color: Color, radius: float) -> void:
+	# Approximate rounded rect with polygon for _draw compatibility.
+	draw_rect(rect, color, true)
+	# Corners.
+	_draw_circle(Vector2(rect.position.x + radius, rect.position.y + radius), radius, color)
+	_draw_circle(Vector2(rect.end.x - radius, rect.position.y + radius), radius, color)
+	_draw_circle(Vector2(rect.position.x + radius, rect.end.y - radius), radius, color)
+	_draw_circle(Vector2(rect.end.x - radius, rect.end.y - radius), radius, color)

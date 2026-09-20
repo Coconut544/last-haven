@@ -70,9 +70,15 @@ func _refresh() -> void:
 	else:
 		var definition := stack.get_definition()
 		var display_name := definition.display_name if definition != null else stack.item_id
+		# Icon chip: use definition color with a subtle gradient.
 		_chip.color = definition.icon_color if definition != null else Color(0.5, 0.5, 0.5)
 		_name_label.text = display_name
-		_count_label.text = "x%d" % stack.quantity if stack.quantity > 1 else ""
+		# Show quantity badge.
+		if stack.quantity > 1:
+			_count_label.text = "%d" % stack.quantity
+			_count_label.add_theme_color_override("font_color", Color(0.95, 0.93, 0.85))
+		else:
+			_count_label.text = ""
 		tooltip_text = "%s\n%s" % [display_name, definition.description if definition != null else ""]
 	_apply_selection_style()
 	_layout()
@@ -81,13 +87,44 @@ func _refresh() -> void:
 func _apply_selection_style() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.1, 0.11, 0.1, 0.85)
-	style.border_color = Color(0.95, 0.78, 0.35) if selected else Color(0.35, 0.37, 0.34)
-	style.set_border_width_all(3 if selected else 1)
 	style.set_corner_radius_all(6)
+	style.set_corner_radius_all(6)
+	if selected:
+		style.border_color = Color(0.95, 0.78, 0.35)
+		style.set_border_width_all(3)
+	elif stack != null and not stack.is_empty():
+		style.border_color = _category_border_color()
+		style.set_border_width_all(2)
+	else:
+		style.border_color = Color(0.25, 0.27, 0.24)
+		style.set_border_width_all(1)
 	add_theme_stylebox_override("normal", style)
-	add_theme_stylebox_override("hover", style)
-	add_theme_stylebox_override("pressed", style)
+	var hover := style.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.15, 0.16, 0.14, 0.9)
+	add_theme_stylebox_override("hover", hover)
+	add_theme_stylebox_override("pressed", hover)
 	add_theme_stylebox_override("focus", style)
+
+
+func _category_border_color() -> Color:
+	if stack == null or stack.is_empty():
+		return Color(0.25, 0.27, 0.24)
+	var definition := stack.get_definition()
+	if definition == null:
+		return Color(0.5, 0.5, 0.5)
+	match definition.category:
+		ItemDefinition.Category.WEAPON:
+			return Color(0.85, 0.25, 0.2)   # red
+		ItemDefinition.Category.TOOL:
+			return Color(0.85, 0.55, 0.15)  # orange
+		ItemDefinition.Category.MATERIAL:
+			return Color(0.45, 0.65, 0.35)  # green
+		ItemDefinition.Category.CONSUMABLE:
+			return Color(0.3, 0.65, 0.85)   # blue
+		ItemDefinition.Category.BUILDING:
+			return Color(0.6, 0.5, 0.35)    # brown
+		_:
+			return Color(0.5, 0.5, 0.55)   # neutral
 
 
 func _notification(what: int) -> void:
@@ -100,9 +137,15 @@ func _layout() -> void:
 		return
 	var width := maxf(24.0, size.x)
 	var height := maxf(24.0, size.y)
-	_chip.position = Vector2(10, 8)
-	_chip.size = Vector2(maxf(12.0, width - 20.0), maxf(12.0, height * 0.38))
-	_name_label.position = Vector2(4, height * 0.48)
-	_name_label.size = Vector2(width - 8, 16)
-	_count_label.position = Vector2(4, height * 0.68)
-	_count_label.size = Vector2(width - 8, 16)
+	# Icon chip (centered).
+	var chip_w := maxf(14.0, width - 16.0)
+	var chip_h := maxf(14.0, height * 0.40)
+	_chip.position = Vector2((width - chip_w) * 0.5, 6)
+	_chip.size = Vector2(chip_w, chip_h)
+	# Item name (below chip).
+	_name_label.position = Vector2(3, height * 0.48)
+	_name_label.size = Vector2(width - 6, 14)
+	# Quantity badge (bottom-right corner).
+	_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_count_label.position = Vector2(width * 0.5, height * 0.74)
+	_count_label.size = Vector2(width * 0.45, 14)

@@ -11,7 +11,7 @@ signal save_requested()
 signal load_requested()
 signal quit_to_menu_requested()
 
-const HOTBAR_SLOTS := 5
+const HOTBAR_SLOTS := 8
 const TOAST_LIFETIME := 3.0
 
 @onready var health_bar: ProgressBar = $Root/Vitals/HealthBar

@@ -201,8 +201,41 @@ func spawn_enemy(spawn_position: Vector2) -> Zombie:
 	zombie.position = spawn_position
 	zombie.home_position = spawn_position
 	zombie.name = "Zombie_%d" % enemy_root.get_child_count()
+	# Assign a random visual variant with weighted probabilities.
+	zombie.visual_variant = _roll_zombie_variant()
+	# Apply variant-specific stat scaling.
+	match zombie.visual_variant:
+		Zombie.ZombieVariant.HEAVY:
+			zombie.max_health = 80.0
+			zombie.attack_damage = 14.0
+			zombie.chase_speed = 42.0
+			zombie.wander_speed = 18.0
+			zombie.attack_cooldown = 1.8
+		Zombie.ZombieVariant.FAST:
+			zombie.max_health = 28.0
+			zombie.attack_damage = 5.0
+			zombie.chase_speed = 105.0
+			zombie.wander_speed = 40.0
+			zombie.attack_cooldown = 0.7
+		Zombie.ZombieVariant.SPECIAL:
+			zombie.max_health = 60.0
+			zombie.attack_damage = 12.0
+			zombie.chase_speed = 58.0
+			zombie.detection_radius = 300.0
 	enemy_root.add_child(zombie)
 	return zombie
+
+
+func _roll_zombie_variant() -> Zombie.ZombieVariant:
+	var roll := randf()
+	if roll < 0.55:
+		return Zombie.ZombieVariant.STANDARD
+	elif roll < 0.78:
+		return Zombie.ZombieVariant.HEAVY
+	elif roll < 0.95:
+		return Zombie.ZombieVariant.FAST
+	else:
+		return Zombie.ZombieVariant.SPECIAL
 
 
 func get_enemy_count() -> int:
