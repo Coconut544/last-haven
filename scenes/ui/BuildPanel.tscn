@@ -1,0 +1,65 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/build_panel.gd" id="1_panel"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 18.0
+content_margin_top = 16.0
+content_margin_right = 18.0
+content_margin_bottom = 16.0
+bg_color = Color(0.07, 0.08, 0.07, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.55, 0.45, 0.25, 0.85)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="BuildPanel" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_panel")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.02, 0.02, 0.02, 0.65)
+
+[node name="Window" type="PanelContainer" parent="."]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -380.0
+offset_top = -180.0
+offset_right = 380.0
+offset_bottom = 180.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="Window"]
+
+[node name="Layout" type="VBoxContainer" parent="Window/Margin"]
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Window/Margin/Layout"]
+text = "Build"
+theme_override_font_sizes/font_size = 26
+
+[node name="Scroll" type="ScrollContainer" parent="Window/Margin/Layout"]
+custom_minimum_size = Vector2(0, 220)
+
+[node name="BuildableList" type="VBoxContainer" parent="Window/Margin/Layout/Scroll"]
+theme_override_constants/separation = 6
+
+[node name="Detail" type="Label" parent="Window/Margin/Layout"]
+text = "Pick a piece to place."
+autowrap_mode = 2
+theme_override_font_sizes/font_size = 14
+
+[node name="CloseButton" type="Button" parent="Window/Margin/Layout"]
+custom_minimum_size = Vector2(0, 52)
+text = "Close"

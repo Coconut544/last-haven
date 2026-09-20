@@ -1,0 +1,37 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
+[ext_resource type="Script" path="res://scripts/world/ground.gd" id="2_ground"]
+[ext_resource type="Script" path="res://scripts/world/day_night_cycle.gd" id="3_daynight"]
+[ext_resource type="Script" path="res://scripts/world/chunk_streamer.gd" id="4_streamer"]
+[ext_resource type="Script" path="res://scripts/world/zombie_spawner.gd" id="5_spawner"]
+
+[node name="World" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1_world")
+generate_on_ready = false
+
+[node name="Ground" type="Node2D" parent="."]
+z_index = -10
+script = ExtResource("2_ground")
+
+[node name="ResourceNodes" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="Structures" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="LootBags" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="Enemies" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="EnemySpawner" type="Node" parent="."]
+script = ExtResource("5_spawner")
+
+[node name="DayNightCycle" type="Node2D" parent="."]
+script = ExtResource("3_daynight")
+
+[node name="ChunkStreamer" type="Node" parent="."]
+script = ExtResource("4_streamer")

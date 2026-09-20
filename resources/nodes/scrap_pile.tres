@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="ResourceNodeDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/resource_node_definition.gd" id="1_node"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_scrap"]
+script = ExtResource("2_ingredient")
+item_id = "scrap"
+quantity = 1
+
+[sub_resource type="Resource" id="Ingredient_metal"]
+script = ExtResource("2_ingredient")
+item_id = "metal"
+quantity = 1
+
+[resource]
+script = ExtResource("1_node")
+id = "scrap_pile"
+display_name = "Scrap Pile"
+visual = 3
+primary_color = Color(0.34, 0.31, 0.29, 1)
+accent_color = Color(0.55, 0.4, 0.28, 1)
+max_uses = 3
+gather_time = 2.0
+preferred_tool = 0
+yields = Array[Ingredient]([SubResource("Ingredient_scrap"), SubResource("Ingredient_metal")])
+respawn_time = 140.0
+collision_radius = 12.0
+interaction_verb = "Search"

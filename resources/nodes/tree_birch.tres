@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="ResourceNodeDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/resource_node_definition.gd" id="1_node"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_wood"]
+script = ExtResource("2_ingredient")
+item_id = "wood"
+quantity = 1
+
+[sub_resource type="Resource" id="Ingredient_fiber"]
+script = ExtResource("2_ingredient")
+item_id = "fiber"
+quantity = 2
+
+[resource]
+script = ExtResource("1_node")
+id = "tree_birch"
+display_name = "Birch"
+visual = 0
+primary_color = Color(0.34, 0.45, 0.22, 1)
+accent_color = Color(0.74, 0.71, 0.62, 1)
+visual_scale = 0.95
+max_uses = 2
+gather_time = 1.8
+preferred_tool = 1
+tool_speed_multiplier = 2.5
+tool_yield_multiplier = 1.5
+yields = Array[Ingredient]([SubResource("Ingredient_wood"), SubResource("Ingredient_fiber")])
+respawn_time = 100.0
+collision_radius = 10.0
+interaction_verb = "Chop"

@@ -1,0 +1,71 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  test:
+    name: Project checks and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Install Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/godot"
+          curl -sSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q -o /tmp/godot.zip -d "$HOME/godot"
+          mv "$HOME/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" "$HOME/godot/godot"
+          chmod +x "$HOME/godot/godot"
+
+      - name: Godot version
+        run: ~/godot/godot --headless --version
+
+      - name: Import project
+        run: ~/godot/godot --headless --path . --import
+
+      - name: Run test suite
+        run: |
+          set -o pipefail
+          ~/godot/godot --headless --path . res://tests/TestRunner.tscn 2>&1 | tee /tmp/tests.log
+          grep -q "RESULT: PASS" /tmp/tests.log
+          if grep -q "SCRIPT ERROR" /tmp/tests.log; then
+            echo "::error::GDScript runtime/parse errors were reported during the test run."
+            exit 1
+          fi
+
+      - name: Boot the game headless
+        run: |
+          set -o pipefail
+          ~/godot/godot --headless --path . --quit-after 180 2>&1 | tee /tmp/boot.log
+          if grep -q "SCRIPT ERROR" /tmp/boot.log; then
+            echo "::error::The game reported script errors while booting."
+            exit 1
+          fi
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validate-logs
+          path: |
+            /tmp/tests.log
+            /tmp/boot.log
+          if-no-files-found: ignore

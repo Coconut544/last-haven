@@ -1,0 +1,77 @@
+[gd_resource type="Resource" script_class="LootTable" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot/loot_table.gd" id="1_table"]
+[ext_resource type="Script" path="res://scripts/loot/loot_entry.gd" id="2_entry"]
+
+[sub_resource type="Resource" id="Entry_wood"]
+script = ExtResource("2_entry")
+item_id = "wood"
+min_quantity = 1
+max_quantity = 3
+chance = 1.0
+weight = 2.0
+
+[sub_resource type="Resource" id="Entry_stone"]
+script = ExtResource("2_entry")
+item_id = "stone"
+min_quantity = 1
+max_quantity = 2
+chance = 1.0
+weight = 2.0
+
+[sub_resource type="Resource" id="Entry_fiber"]
+script = ExtResource("2_entry")
+item_id = "fiber"
+min_quantity = 1
+max_quantity = 4
+chance = 1.0
+weight = 1.5
+
+[sub_resource type="Resource" id="Entry_scrap"]
+script = ExtResource("2_entry")
+item_id = "scrap"
+min_quantity = 1
+max_quantity = 2
+chance = 1.0
+weight = 1.5
+
+[sub_resource type="Resource" id="Entry_metal"]
+script = ExtResource("2_entry")
+item_id = "metal"
+min_quantity = 1
+max_quantity = 1
+chance = 1.0
+weight = 0.4
+rarity = 1
+
+[sub_resource type="Resource" id="Entry_berries"]
+script = ExtResource("2_entry")
+item_id = "berries"
+min_quantity = 1
+max_quantity = 2
+chance = 0.6
+weight = 1.0
+
+[sub_resource type="Resource" id="Entry_bandage"]
+script = ExtResource("2_entry")
+item_id = "bandage"
+min_quantity = 1
+max_quantity = 1
+chance = 0.5
+weight = 0.6
+
+[sub_resource type="Resource" id="Entry_knife"]
+script = ExtResource("2_entry")
+item_id = "knife"
+min_quantity = 1
+max_quantity = 1
+chance = 0.2
+weight = 0.15
+rarity = 1
+
+[resource]
+script = ExtResource("1_table")
+id = "common_crate"
+guaranteed_rolls = 2
+chance_rolls = 1
+entries = Array[LootEntry]([SubResource("Entry_wood"), SubResource("Entry_stone"), SubResource("Entry_fiber"), SubResource("Entry_scrap"), SubResource("Entry_metal"), SubResource("Entry_berries"), SubResource("Entry_bandage"), SubResource("Entry_knife")])

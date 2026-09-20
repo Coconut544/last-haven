@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_definition.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = "fiber"
+display_name = "Fiber"
+description = "Twisted plant fibre for binding and bandages."
+category = 0
+stack_size = 60
+weight = 0.05
+icon_color = Color(0.55, 0.62, 0.33, 1)
+icon_glyph = "F"

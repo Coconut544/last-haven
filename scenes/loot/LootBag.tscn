@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot/loot_bag.gd" id="1_bag"]
+[ext_resource type="Script" path="res://scripts/inventory/inventory_component.gd" id="2_inventory"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_area"]
+radius = 18.0
+
+[node name="LootBag" type="Area2D"]
+collision_layer = 16
+collision_mask = 0
+script = ExtResource("1_bag")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_area")
+
+[node name="Inventory" type="Node" parent="."]
+script = ExtResource("2_inventory")
+capacity = 12
+inventory_id = "loot_bag"

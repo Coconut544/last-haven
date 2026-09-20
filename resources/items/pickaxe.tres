@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_definition.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = "pickaxe"
+display_name = "Pickaxe"
+description = "Breaks rock down into usable stone and ore."
+category = 1
+stack_size = 1
+weight = 1.8
+icon_color = Color(0.5, 0.52, 0.56, 1)
+icon_glyph = "P"
+tool_type = 2
+tool_power = 2.6
+durability = 160
+attack_damage = 16.0
+attack_cooldown = 0.9
+attack_range = 32.0

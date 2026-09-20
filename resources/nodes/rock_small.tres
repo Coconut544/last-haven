@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="ResourceNodeDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/resource_node_definition.gd" id="1_node"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_stone"]
+script = ExtResource("2_ingredient")
+item_id = "stone"
+quantity = 2
+
+[resource]
+script = ExtResource("1_node")
+id = "rock_small"
+display_name = "Rock Outcrop"
+visual = 1
+primary_color = Color(0.45, 0.46, 0.48, 1)
+accent_color = Color(0.28, 0.28, 0.3, 1)
+max_uses = 3
+gather_time = 2.6
+preferred_tool = 2
+tool_speed_multiplier = 2.5
+tool_yield_multiplier = 1.5
+yields = Array[Ingredient]([SubResource("Ingredient_stone")])
+respawn_time = 150.0
+collision_radius = 13.0
+interaction_verb = "Mine"

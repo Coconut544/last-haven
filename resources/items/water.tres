@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_definition.gd" id="1_item"]
+
+[resource]
+script = ExtResource("1_item")
+id = "water"
+display_name = "Water"
+description = "Bottled water. Dehydration kills faster than the dead do."
+category = 4
+stack_size = 10
+weight = 1.0
+icon_color = Color(0.32, 0.55, 0.75, 1)
+icon_glyph = "H"
+water_restore = 40.0

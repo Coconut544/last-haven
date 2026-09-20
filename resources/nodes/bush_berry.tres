@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="ResourceNodeDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/resource_node_definition.gd" id="1_node"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_berries"]
+script = ExtResource("2_ingredient")
+item_id = "berries"
+quantity = 2
+
+[resource]
+script = ExtResource("1_node")
+id = "bush_berry"
+display_name = "Berry Bush"
+visual = 2
+primary_color = Color(0.24, 0.36, 0.2, 1)
+accent_color = Color(0.6, 0.25, 0.35, 1)
+max_uses = 2
+gather_time = 1.4
+preferred_tool = 0
+yields = Array[Ingredient]([SubResource("Ingredient_berries")])
+respawn_time = 80.0
+collision_radius = 8.0
+interaction_verb = "Forage"

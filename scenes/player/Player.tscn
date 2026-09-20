@@ -1,0 +1,89 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/player/survival_stats.gd" id="3_stats"]
+[ext_resource type="Script" path="res://scripts/inventory/inventory_component.gd" id="4_inventory"]
+[ext_resource type="Script" path="res://scripts/player/interactor.gd" id="5_interactor"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="6_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="7_hurtbox"]
+[ext_resource type="Script" path="res://scripts/building/build_system.gd" id="8_build"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 11.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_reach"]
+radius = 46.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurtbox"]
+radius = 13.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hitbox"]
+radius = 18.0
+
+[node name="Player" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 13
+motion_mode = 1
+script = ExtResource("1_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 100.0
+
+[node name="Stats" type="Node" parent="."]
+script = ExtResource("3_stats")
+
+[node name="Inventory" type="Node" parent="."]
+script = ExtResource("4_inventory")
+capacity = 20
+inventory_id = "player"
+
+[node name="Interactor" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 16
+monitorable = false
+script = ExtResource("5_interactor")
+max_reach = 52.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Interactor"]
+shape = SubResource("CircleShape2D_reach")
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 64
+collision_mask = 0
+monitoring = false
+script = ExtResource("7_hurtbox")
+health_path = NodePath("../Health")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("CircleShape2D_hurtbox")
+
+[node name="AttackHitbox" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 128
+monitoring = false
+monitorable = false
+script = ExtResource("6_hitbox")
+damage = 6.0
+damage_mask = 128
+reach = 26.0
+active_time = 0.18
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackHitbox"]
+shape = SubResource("CircleShape2D_hitbox")
+
+[node name="BuildSystem" type="Node" parent="."]
+script = ExtResource("8_build")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(1.2, 1.2)
+limit_left = -1540
+limit_top = -1540
+limit_right = 1540
+limit_bottom = 1540
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0

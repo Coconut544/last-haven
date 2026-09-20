@@ -1,0 +1,56 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/zombie.gd" id="1_zombie"]
+[ext_resource type="Script" path="res://scripts/combat/health_component.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="3_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="4_hurtbox"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 11.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurtbox"]
+radius = 14.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hitbox"]
+radius = 16.0
+
+[node name="Zombie" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 11
+motion_mode = 1
+script = ExtResource("1_zombie")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 45.0
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 128
+collision_mask = 0
+monitoring = false
+script = ExtResource("4_hurtbox")
+health_path = NodePath("../Health")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("CircleShape2D_hurtbox")
+
+[node name="AttackHitbox" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 64
+monitoring = false
+monitorable = false
+script = ExtResource("3_hitbox")
+damage = 8.0
+damage_mask = 64
+reach = 18.0
+active_time = 0.2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackHitbox"]
+shape = SubResource("CircleShape2D_hitbox")
+
+[node name="Sight" type="RayCast2D" parent="."]
+collision_mask = 9
+enabled = true

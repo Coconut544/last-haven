@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="ResourceNodeDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/resource_node_definition.gd" id="1_node"]
+[ext_resource type="Script" path="res://scripts/items/ingredient.gd" id="2_ingredient"]
+
+[sub_resource type="Resource" id="Ingredient_wood"]
+script = ExtResource("2_ingredient")
+item_id = "wood"
+quantity = 2
+
+[resource]
+script = ExtResource("1_node")
+id = "tree_pine"
+display_name = "Pine"
+visual = 0
+primary_color = Color(0.16, 0.34, 0.2, 1)
+accent_color = Color(0.34, 0.24, 0.14, 1)
+visual_scale = 1.15
+max_uses = 3
+gather_time = 2.2
+preferred_tool = 1
+tool_speed_multiplier = 2.5
+tool_yield_multiplier = 1.5
+yields = Array[Ingredient]([SubResource("Ingredient_wood")])
+respawn_time = 120.0
+collision_radius = 12.0
+interaction_verb = "Chop"
